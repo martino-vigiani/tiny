@@ -54,6 +54,40 @@ var displayCommands = map[string]displayCommand{
 	"bar":  runBar,
 }
 
+// globalFlags are the flags parsed before the subcommand. They are listed here
+// only so a misplaced one can be recognised and reported.
+var globalFlags = map[string]bool{
+	"-theme": true, "--theme": true,
+	"-no-color": true, "--no-color": true,
+	"-format": true, "--format": true,
+	"-o": true, "--o": true,
+}
+
+// misplacedGlobalFlag returns the global flag a display command was handed by
+// mistake, or "".
+//
+// `tiny say -theme house.yaml "Deployed"` used to print
+// `-theme house.yaml Deployed` — the flag became part of the message, silently,
+// because a display command treats its bare arguments as text. Silently wrong
+// output is worse than a rejection: nothing tells the caller their theme was
+// ignored.
+//
+// The scan stops at `--`, since past that point the words belong to whoever the
+// command hands them to: `tiny spin "Building" -- go build -o out` must keep
+// its -o, and `tiny say -- -theme` must be able to print the literal word.
+func misplacedGlobalFlag(args []string) string {
+	for _, a := range args {
+		if a == "--" {
+			return ""
+		}
+		name, _, _ := strings.Cut(a, "=")
+		if globalFlags[name] {
+			return name
+		}
+	}
+	return ""
+}
+
 // newUI builds the drawing context for a display command.
 func newUI(themeRef string, noColor bool) (*UI, error) {
 	resolved, err := resolveTheme(nil, themeRef, noColor)

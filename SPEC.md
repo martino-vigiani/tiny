@@ -114,6 +114,10 @@ steps:
 | `editor`      | string               | `""`    | `editor`                                        | **Parsed and ignored.** The editor comes from `$VISUAL`/`$EDITOR` only — honouring it from a spec was arbitrary code execution. |
 | `format`      | string               | `"date"`| `date`                                          | `"date"` (`YYYY-MM-DD`) or `"datetime"` (`YYYY-MM-DD HH:MM:SS`).      |
 | `delimiter`   | string               | `""`    | —                                               | Parsed but **currently unused** (forward compatibility).              |
+| `pattern`     | string               | `""`    | `input`, `password`, `editor`                   | RE2 regexp the answer must match. The step's own `default` is checked against it when the spec loads, so a default that fails its own rule is a load error, not a surprise at the prompt. |
+| `message`     | string               | `""`    | `input`, `password`, `editor`                   | Replaces the generated explanation shown when an answer is rejected. Write it as an instruction, not a complaint. |
+| `min_length`  | int                  | `0`     | `input`, `password`, `editor`                   | Fewest characters accepted. `0` is unbounded. |
+| `max_length`  | int                  | `0`     | `input`, `password`, `editor`                   | Most characters accepted. `0` is unbounded. |
 | `when`        | string               | `""`    | all                                             | Condition on an earlier answer; the step runs only if it holds. See *Conditional steps*. |
 | `height`      | int                  | `0`     | `select`, `multiselect`, `search`, `autocomplete` | Show at most N options at once; the rest become a `… N more` marker. `0` shows all. |
 | `match`       | string               | varies  | `select`, `search`, `autocomplete`, `multiselect` | How a typed filter is compared: `substring`, `prefix` or `fuzzy`. |
@@ -130,7 +134,7 @@ neither `title` nor `prompt`, the header is empty.
 
 ---
 
-## The 12 step types
+## The 13 step types
 
 ### `select`
 
@@ -454,6 +458,31 @@ Display tabular data; optionally pick a row.
 
 ---
 
+### file
+
+Pick a path from a directory listing.
+
+```yaml
+- type: file
+  key: overlay
+  title: "Config overlay"
+  root: "config"      # the listing is confined to this directory
+  dirs: false         # true answers with a directory instead of descending into it
+  hidden: false       # true includes dot-files
+  default: "config/base.yaml"
+```
+
+| | |
+|---|---|
+| **Answer** | string — an **absolute** path, so the caller need not know tiny's working directory |
+| **Default** | a path; the listing opens in the directory holding it, and it is marked in that listing so pressing enter accepts it |
+| **Unanswered** | the `default` if there is one, otherwise `""` (or an error when `required`) |
+
+The listing shows `../` only below `root`, symlinks are resolved before the
+containment check, and a path outside the root is refused. That is what keeps
+"a spec cannot read a file you did not point it at" true when the spec is one
+you were sent.
+
 ## Rich options
 
 An option may be written as a mapping instead of a bare value:
@@ -626,6 +655,11 @@ without a terminal emits one plain line with no escape sequences.
 | `box [title]` | `--width N`; body from stdin | `0`, or `2` with neither title nor body, or a width too small |
 | `bar <current> <total> [label]` | — | `0`, or `2` for a total ≤ 0, a negative current, or a non-numeric argument |
 
+Global flags come **before** the command — `tiny -theme house.yaml say "Deployed"`,
+not `tiny say -theme house.yaml "Deployed"`. The second form is rejected with an
+explanation rather than treated as text; `TINY_THEME` works in either position
+and is what a script is usually better off setting.
+
 Notes that matter to a caller:
 
 - `spin` wires the child's **stdout to tiny's stdout**, so a payload-producing
@@ -648,6 +682,13 @@ Notes that matter to a caller:
 without reading input. One JSON object per line: `{"steps": [...], "answers": {...}}`,
 sorted so two runs of the same spec print the same list.
 
+**It prints one line per distinct set of steps, not one per answer.** A select
+with three options where only one of them opens a branch produces two lines,
+not three: the two options that lead to the same questions are the same path,
+and the `answers` field names one set of answers that reaches it — a witness,
+not the only way there. Use it to check that every branch is reachable, not to
+count how many values you have tested.
+
 Only keys some condition reads are branched, each over a declared domain:
 
 | Step type                            | Values tried                                     |
@@ -657,6 +698,9 @@ Only keys some condition reads are branched, each over a declared domain:
 | `multiselect`                        | nothing, each option alone, all of them          |
 | `number`                             | its default, plus every numeric literal compared against it |
 | everything else                      | its default, plus every literal compared against it |
+
+Those are the values *explored*; what is *printed* is the distinct step
+sequences they produce.
 
 It is a bounded exploration, not a proof: it cannot invent the one string that
 satisfies a `==` the spec never mentions. It **does** guarantee that every path

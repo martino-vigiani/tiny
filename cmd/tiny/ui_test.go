@@ -56,3 +56,27 @@ func TestSpinMessageHasNoTabs(t *testing.T) {
 		t.Errorf("a tab reached the spinner line: %q", out.String())
 	}
 }
+
+// A global flag written after the subcommand used to be swallowed as text:
+// `tiny say -theme house.yaml "Deployed"` printed the flag instead of applying
+// it, with nothing to say the theme had been ignored. Found by an agent that
+// was given only the documentation and told to integrate tiny — it hit this on
+// its first attempt at a themed script.
+func TestMisplacedGlobalFlagIsRecognised(t *testing.T) {
+	if got := misplacedGlobalFlag([]string{"-theme", "house.yaml", "Deployed"}); got != "-theme" {
+		t.Errorf("misplacedGlobalFlag = %q, want -theme", got)
+	}
+	if got := misplacedGlobalFlag([]string{"--theme=house.yaml", "Deployed"}); got != "--theme" {
+		t.Errorf("the =value form was not recognised: %q", got)
+	}
+	if got := misplacedGlobalFlag([]string{"Deployed", "--style", "note"}); got != "" {
+		t.Errorf("a command's own flag was reported as misplaced: %q", got)
+	}
+	// Past `--` the words belong to whoever the command hands them to.
+	if got := misplacedGlobalFlag([]string{"Building", "--", "go", "build", "-o", "out"}); got != "" {
+		t.Errorf("the child command's own -o was reported as misplaced: %q", got)
+	}
+	if got := misplacedGlobalFlag([]string{"--", "-theme"}); got != "" {
+		t.Errorf("a literal word after -- was reported as misplaced: %q", got)
+	}
+}

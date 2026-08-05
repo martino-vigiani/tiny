@@ -30,7 +30,11 @@ $ tiny wizard.yaml | jq
 }
 ```
 
-<!-- MEDIA: terminal recording of `tiny wizard.yaml` being answered interactively, then piped to jq -->
+<p align="center">
+  <img src="docs/media/wizard.svg" alt="A wizard being answered in the terminal: a select with descriptions, a fuzzy search, a confirm, and the JSON payload at the end" width="100%">
+</p>
+
+<sub>Recorded from the real binary — see <a href="docs/media/record.py"><code>docs/media/record.py</code></a>.</sub>
 
 ## Why
 
@@ -54,9 +58,9 @@ Measured on this repo, not claimed:
 
 - **3.0 MB** binary (`go build -trimpath -ldflags "-s -w"`, `du -h`).
 - **2 direct dependencies** — `golang.org/x/term` and `gopkg.in/yaml.v3` (see `go.mod`).
-- **Under 6 MB** peak resident memory and CPU time too small to register,
-  running a wizard headless (`/usr/bin/time -l tiny -defaults examples/quickstart.yaml`).
-- **341 tests**, all green (`go test ./...`).
+- **5.8 MiB** peak resident memory, and CPU time too small to register, running a
+  wizard headless (`/usr/bin/time -l tiny -defaults examples/quickstart.yaml`).
+- **342 tests**, all green (`go test -race ./...`).
 
 No framework, no runtime dependency beyond the two above, nothing to
 install alongside it.
@@ -106,7 +110,9 @@ command substitution above captures clean answers while a human still sees
 the questions on screen. In CI, `-defaults` skips stdin entirely and
 resolves every step to its default.
 
-<!-- MEDIA: terminal recording of scaffold.sh run interactively, then run again with --ci -->
+<p align="center">
+  <img src="docs/media/scaffold.svg" alt="scaffold.sh running unattended with --ci and scaffolding a project tree" width="100%">
+</p>
 
 ## Coding agents
 
@@ -137,7 +143,9 @@ Without a terminal, each one degrades to a single plain line with no escape
 sequences — useful in a CI log, where animated frames are why people turn
 spinners off. See them all in fifteen seconds: [`examples/show.sh`](examples/show.sh).
 
-<!-- MEDIA: terminal recording of spin, say, box, bar running in sequence -->
+<p align="center">
+  <img src="docs/media/display.svg" alt="say, spin, bar and box drawing in sequence in the terminal" width="100%">
+</p>
 
 ## Reference
 

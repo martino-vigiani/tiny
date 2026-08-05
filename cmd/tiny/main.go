@@ -106,12 +106,21 @@ func run(args []string) int {
 	// The display commands come first: they draw rather than ask, take their
 	// own flags, and never reach the wizard machinery at all.
 	if cmd, ok := displayCommands[fs.Arg(0)]; ok {
+		name := fs.Arg(0)
+		args := fs.Args()[1:]
+		// A global flag written after the subcommand is not a flag at all: it
+		// becomes part of the message. Saying so beats printing it.
+		if flag := misplacedGlobalFlag(args); flag != "" {
+			fmt.Fprintf(os.Stderr, "tiny: %s comes before the command: tiny %s ... %s ...\n"+
+				"      (or set TINY_THEME, which works anywhere)\n", flag, flag, name)
+			return 2
+		}
 		ui, uiErr := newUI(*themeRef, *noColor)
 		if uiErr != nil {
 			fmt.Fprintf(os.Stderr, "tiny: %v\n", uiErr)
 			return 1
 		}
-		return cmd(fs.Args()[1:], ui)
+		return cmd(args, ui)
 	}
 
 	// A first argument naming a step type means the wizard was written as argv
