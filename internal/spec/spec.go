@@ -75,8 +75,17 @@ type Step struct {
 	// the top of the terminal before it can be read.
 	Height int `yaml:"height,omitempty"`
 
-	// cond is When parsed, filled by Validate so every run reuses it.
+	// Validation for the text steps. Pattern is an RE2 regexp; Message
+	// replaces the generated explanation when the answer is rejected.
+	Pattern   string `yaml:"pattern,omitempty"`
+	MinLength int    `yaml:"min_length,omitempty"`
+	MaxLength int    `yaml:"max_length,omitempty"`
+	Message   string `yaml:"message,omitempty"`
+
+	// cond is When parsed and rule is the compiled validation, both filled by
+	// Validate so a run never re-parses or re-compiles them.
 	cond *Condition
+	rule *TextRule
 }
 
 // Condition returns the step's parsed `when:` expression, or nil when the step
@@ -117,6 +126,9 @@ func (w *Wizard) Validate() error {
 		}
 		seen[s.Key] = true
 		if err := s.validate(); err != nil {
+			return err
+		}
+		if err := s.validateText(); err != nil {
 			return err
 		}
 	}

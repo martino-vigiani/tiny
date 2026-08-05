@@ -31,6 +31,10 @@ func (inputWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, error) 
 			return nil, err
 		}
 		if strings.TrimSpace(line) != "" {
+			if problem := s.Rule().Check(line); problem != "" {
+				PrintError(env, problem)
+				continue
+			}
 			return line, nil
 		}
 		if def, ok := s.Default.(string); ok && def != "" {

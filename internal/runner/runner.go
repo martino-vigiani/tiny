@@ -58,7 +58,9 @@ func (r *Runner) Run(ctx context.Context, wiz *spec.Wizard) (map[string]any, err
 		if !step.Condition().Eval(answers) {
 			continue
 		}
-		value, err := widgets.RunStep(ctx, step, r.env)
+		// A step can refer to earlier answers in its text and default; the
+		// same map the condition was evaluated against fills them in.
+		value, err := widgets.RunStep(ctx, step.Interpolate(answers), r.env)
 		if err != nil {
 			return nil, fmt.Errorf("step %q: %w", step.Key, err)
 		}

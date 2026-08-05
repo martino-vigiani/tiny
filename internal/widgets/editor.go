@@ -92,7 +92,12 @@ func readMultiline(ctx context.Context, s spec.Step, env *Env) (any, error) {
 		}
 		return "", nil
 	}
-	return strings.Join(lines, "\n"), nil
+	text := strings.Join(lines, "\n")
+	if problem := s.Rule().Check(text); problem != "" {
+		PrintError(env, problem)
+		return readMultiline(ctx, s, env)
+	}
+	return text, nil
 }
 
 func runEditor(ctx context.Context, s spec.Step, editor string) (any, error) {

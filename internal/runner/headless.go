@@ -18,7 +18,7 @@ func (r *Runner) RunDefaults(wiz *spec.Wizard) (map[string]any, error) {
 		if !s.Condition().Eval(answers) {
 			continue
 		}
-		value, err := defaultForStep(s)
+		value, err := defaultForStep(s.Interpolate(answers))
 		if err != nil {
 			return nil, fmt.Errorf("step %q: %w", s.Key, err)
 		}

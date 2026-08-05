@@ -31,6 +31,10 @@ func (passwordWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, erro
 			return nil, err
 		}
 		if value != "" {
+			if problem := s.Rule().Check(value); problem != "" {
+				PrintError(env, problem)
+				continue
+			}
 			return value, nil
 		}
 		if def, ok := s.Default.(string); ok && def != "" {
