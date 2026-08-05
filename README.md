@@ -151,6 +151,29 @@ tiny -defaults demo | jq     # the same answers, headless
 The showcase is compiled into the binary, so it runs from any directory with
 nothing checked out.
 
+## The other half: showing
+
+A harness does not only ask, it shows. Four commands draw rather than collect
+an answer — so there is no headless parity to keep, and nothing reaches stdout:
+
+```sh
+tiny spin "Building…" -- go build ./...   # spinner while a command runs
+tiny say "Deploy complete" --style header # one styled line
+tiny box "Plan" < plan.md                 # a bordered box
+tiny bar 3 12 "files"                     # a progress line, redrawn in place
+```
+
+| Command | Notes |
+| --- | --- |
+| `spin <msg> -- <cmd>` | Exits with the child's code; the child's stdout passes straight through, so `tiny spin … -- cmd \| jq` still works. Ctrl-C reaches the child. `--stream` trades the animation for live stderr. |
+| `say <text>` | `--style header\|note\|error\|hint\|option\|table-header\|plain`. Reads stdin when given no text. |
+| `box [title]` | Wraps to terminal **cells**, so CJK and combining marks keep the edges square. `--width N`. |
+| `bar <cur> <total> [label]` | Overwrites its own line, and ends with a newline exactly when it reaches the total. |
+
+Without a terminal every one of them degrades to one plain line with **no escape
+sequences at all** — a CI log full of spinner frames is why people disable
+spinners. See them in fifteen seconds with [`examples/show.sh`](examples/show.sh).
+
 ## Step types (13)
 
 | Type | Answer | Description |

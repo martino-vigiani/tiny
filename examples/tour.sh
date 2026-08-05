@@ -239,11 +239,27 @@ tour_inert() {
   pause
 }
 
+# ── 14. the display commands ─────────────────────────────────────────────────
+tour_show() {
+  section "14 · L'altra meta: mostrare" \
+    "spin, say, box, bar — disegnano invece di chiedere. Niente su stdout."
+  tiny say "Deploy completato" --style header
+  printf 'Verranno riscritti 3 file.\n' | tiny box "Piano" --width 52
+  local i
+  for i in $(seq 0 10); do tiny bar "$i" 10 "file elaborati"; sleep 0.05; done
+  tiny spin "Compilo" -- sleep 1
+  tiny spin "Fallisce" -- sh -c 'echo "errore" >&2; exit 3'
+  printf '%s  codice di uscita del figlio: %s%s\n' "$dim" "$?" "$off"
+  printf '\n%s  $ tiny spin "Genero" -- echo %s | wc -c%s\n' "$bold" "'{\"ok\":true}'" "$off"
+  tiny spin "Genero" -- echo '{"ok":true}' | wc -c
+  pause
+}
+
 tour_end() {
   section "Fine" "tiny -h per tutti i flag · https://github.com/martino-vigiani/tiny"
 }
 
-sections=(hello argv themes fuzzy labels multi validation demo headless paths meta streams inert)
+sections=(hello argv themes fuzzy labels multi validation demo headless paths meta streams inert show)
 
 if [ $# -gt 0 ]; then
   for name in "$@"; do

@@ -357,3 +357,36 @@ func TestBarShowsPercentageAndCounts(t *testing.T) {
 		}
 	}
 }
+
+// A bar on a terminal wears the theme like everything else tiny draws, and a
+// bar without one carries no escape at all — the guarantee a CI log depends on.
+// Colouring happens after the layout, so the styled line must still measure
+// exactly what the plain one did.
+func TestBarIsThemedOnATerminalAndBareWithoutOne(t *testing.T) {
+	resolved, err := theme.Resolve(theme.Default(), true)
+	if err != nil {
+		t.Fatalf("Resolve error: %v", err)
+	}
+	var lit, dark strings.Builder
+	onTTY := &UI{Err: &lit, Theme: resolved, TTY: true, Width: func() int { return 60 }}
+	offTTY := &UI{Err: &dark, Theme: resolved, TTY: false, Width: func() int { return 60 }}
+
+	if code := runBar([]string{"3", "12", "file"}, onTTY); code != 0 {
+		t.Fatalf("runBar on a terminal = %d", code)
+	}
+	if code := runBar([]string{"3", "12", "file"}, offTTY); code != 0 {
+		t.Fatalf("runBar without a terminal = %d", code)
+	}
+	if !strings.Contains(lit.String(), "\x1b[") {
+		t.Errorf("a bar on a terminal carried no theme at all: %q", lit.String())
+	}
+	if strings.ContainsRune(dark.String(), 0x1b) {
+		t.Errorf("an escape sequence reached a non-terminal: %q", dark.String())
+	}
+	// Same line, measured with escapes discounted.
+	plain := strings.TrimRight(dark.String(), "\n")
+	styled := strings.TrimPrefix(strings.TrimPrefix(lit.String(), theme.ColumnZero), theme.EraseEOL)
+	if got, want := cellWidth(styled), cellWidth(plain); got != want {
+		t.Errorf("the styled line measures %d cells, the plain one %d", got, want)
+	}
+}

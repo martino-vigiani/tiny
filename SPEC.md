@@ -525,6 +525,7 @@ Confinement, because `include:` is the one feature that reads a second file:
 tiny [flags] <wizard.yaml>
 tiny [flags] -                 # read the spec from stdin
 tiny demo                      # run the showcase compiled into the binary
+tiny spin|say|box|bar ...      # the display commands (see below)
 tiny -paths <wizard.yaml>      # list every path; ask nothing
 ```
 
@@ -610,6 +611,36 @@ tiny -version                           # tiny v0.3.0
 ```
 
 ---
+
+### The display commands
+
+`spin`, `say`, `box` and `bar` draw rather than ask. They collect no answer, so
+none of the wizard rules about parity, defaults or payload applies to them —
+what carries over is that everything is written to **stderr** and that a run
+without a terminal emits one plain line with no escape sequences.
+
+| Command | Arguments | Exit code |
+|---|---|---|
+| `spin <message> -- <command>...` | `--stream` (first) streams the child's stderr live instead of buffering it, and turns the animation off | the child's; `1` if it could not start; `128+signal` if it was killed |
+| `say [text]` | `--style header\|note\|error\|hint\|option\|table-header\|plain` (default `note`); text from stdin when not given; `--` ends flag parsing | `0`, or `2` for an unknown style or no text at all |
+| `box [title]` | `--width N`; body from stdin | `0`, or `2` with neither title nor body, or a width too small |
+| `bar <current> <total> [label]` | — | `0`, or `2` for a total ≤ 0, a negative current, or a non-numeric argument |
+
+Notes that matter to a caller:
+
+- `spin` wires the child's **stdout to tiny's stdout**, so a payload-producing
+  command keeps working inside a pipeline. Its own animation is on stderr.
+- `spin` buffers the child's stderr while animating (capped, with a note when it
+  truncates) so it cannot interleave with a frame redraw; `--stream` opts out.
+- `bar` ends its line with a newline exactly when `current` reaches `total`.
+  A `current` above `total` is clamped, not rejected: that is what a caller's
+  own rounding produces on the last iteration.
+- `box` and `bar` measure in terminal **cells**, so CJK text and combining marks
+  do not skew a border or overflow a line.
+- Text supplied to any of them is stripped of control characters before it is
+  drawn, for the same reason spec text is: an escape sequence in it would drive
+  the terminal instead of printing. `say` keeps tabs (its input is build logs);
+  the commands that draw a measured line do not.
 
 ### -paths
 

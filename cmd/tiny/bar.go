@@ -14,10 +14,10 @@ package main
 // newline-terminated line with no escapes at all: a CI log where every update
 // overwrote the last one is a log with no progress in it.
 //
-// Unlike the other display commands, bar deliberately ignores the theme's
-// color pairs. Its one hard requirement — zero escape sequences reach a
-// non-terminal — has to hold no matter how the theme resolved color, so the
-// simplest way to guarantee it is to never emit color for the bar at all.
+// The line is laid out first and coloured afterwards (see colourBar), so the
+// width guarantee stays independent of the theme: escapes occupy no columns,
+// and the "zero escape sequences without a terminal" rule holds because the
+// colouring step only runs when there is one.
 
 import (
 	"fmt"
@@ -87,7 +87,7 @@ func runBar(args []string, ui *UI) int {
 	if ui.TTY {
 		ui.Write(theme.ColumnZero)
 		ui.Write(theme.EraseEOL)
-		ui.Write(line)
+		ui.Write(colourBar(line, ui.Theme))
 		if done {
 			ui.Write("\n")
 		}
@@ -207,17 +207,13 @@ func formatCount(f float64) string {
 	return strconv.FormatFloat(f, 'g', -1, 64)
 }
 
-// sanitizeLabel strips control characters from spec text before it reaches the
-// terminal.
-//
-// This is a duplicate of widgets.Env.appendText's loop, not a reuse of it: it
-// is unexported in another package, and the reason for the check is the same
-// one documented there — a label can come from a script or a CI variable
-// built from elsewhere, and a raw escape sequence in it (e.g. an OSC 52
-// clipboard write) would execute on the terminal instead of just printing as
-// text. Removing the ESC/control byte leaves any following printable
-// characters visible but inert, which is enough: they can no longer be
-// interpreted as part of a sequence.
+// sanitizeLabel strips every control character from a label: it is drawn on
+// one measured line, so a tab (which advances to the next tab stop while
+// measuring as one cell) would break the width guarantee just as an escape
+// sequence would break the terminal. See sanitizeText in ui.go for the rest of
+// the reasoning: a label can come from a script or a CI variable built from
+// elsewhere, and a raw escape sequence in it would drive the terminal instead
+// of printing as text.
 func sanitizeLabel(text string) string {
 	return sanitizeText(text, false, false)
 }
@@ -256,3 +252,24 @@ func clipCells(s string, limit int, ellipsis string) string {
 // of cells lets a CJK label overflow a line meant to stay a fixed size — so
 // rather than declare the same two functions twice in one package, bar.go
 // reuses box.go's copy. See box.go for the fuller rationale.
+
+// colourBar styles an already-rendered line, and only when there is a terminal
+// to style for.
+//
+// Colouring after the layout, rather than during it, is what lets the width
+// guarantee stay simple: escapes occupy no columns, so a line that fitted
+// still fits, and the "no escape sequences at all without a terminal" rule
+// holds by construction rather than by remembering to check.
+//
+// It uses the marker and option pairs specifically. The note and error pairs
+// carry the theme's prefix inside them (theme.Resolve builds NoteOpen as the
+// colour plus NotePrefix), and a prefix injected mid-line would be visible
+// text the layout never accounted for.
+func colourBar(line string, t *theme.Resolved) string {
+	end := strings.IndexByte(line, ']')
+	if len(line) == 0 || line[0] != '[' || end < 0 {
+		return line
+	}
+	return "[" + t.MarkerOpen + line[1:end] + t.MarkerClose + "]" +
+		t.OptionOpen + line[end+1:] + t.OptionClose
+}

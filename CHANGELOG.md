@@ -20,6 +20,11 @@
   one JSON object per line, with the answers that reach it. Reads no input.
   Bounded exploration, reported as cut when it is; every path printed is
   reachable by the answers printed beside it.
+- **The display commands** — `spin`, `say`, `box`, `bar`: the half of a harness
+  that shows rather than asks. They produce no answer, so nothing about the
+  payload changes; they draw on stderr, and degrade to one plain escape-free
+  line where there is no terminal. `spin` exits with its child's code and lets
+  the child's stdout through untouched.
 - **`-meta`**: a `_meta` block recording the version, the spec and the sha256 of
   every byte read, the mode, whether there was a terminal, and which steps were
   never asked. Off by default, since a timestamp breaks byte-reproducibility.
