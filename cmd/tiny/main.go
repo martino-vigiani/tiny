@@ -139,7 +139,14 @@ func run(args []string) int {
 			return 1
 		}
 		specBytes = data
-		wiz, err = spec.Parse(data)
+		if fs.Arg(0) == "-" {
+			wiz, err = spec.Parse(data)
+		} else {
+			// From a file, so `include:` has a directory to be relative to.
+			// The bytes of every file read replace the one file's, or -meta
+			// would fingerprint a wizard whose fragments could change under it.
+			wiz, specBytes, err = spec.ParseFileSource(fs.Arg(0))
+		}
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "tiny: invalid wizard: %v\n", err)
 			return 1

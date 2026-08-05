@@ -1,0 +1,30 @@
+# composed — one wizard assembled out of files.
+#
+#   tiny examples/composed.yaml
+#   tiny -defaults -meta examples/composed.yaml
+#
+# The shared questions live in fragments/ and are written once. Includes are
+# resolved relative to this file and confined to its directory tree: a spec
+# can pull in what was already sitting next to it, and nothing else.
+
+include:
+  - fragments/ownership.yaml
+
+steps:
+  - type: confirm
+    key: change_review
+    title: "Has this change been reviewed?"
+    default: "no"
+    when: "env == prod"
+
+  - type: input
+    key: ticket
+    title: "Change ticket for ${owner}"
+    default: "OPS-0000"
+    pattern: "^[A-Z]{2,6}-[0-9]+$"
+    when: "change_review"
+
+  - type: confirm
+    key: apply
+    title: "Deploy to ${env} as ${owner}?"
+    default: "no"

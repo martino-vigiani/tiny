@@ -1,0 +1,28 @@
+# A fragment: the questions this organisation asks the same way every time.
+#
+# Included, not copied — see examples/composed.yaml. A fragment is not a
+# wizard on its own: its steps may be conditioned on keys the including file
+# answers, so it is validated only once assembled.
+
+steps:
+  - type: input
+    key: owner
+    title: "Owning team"
+    default: platform
+    pattern: "^[a-z][a-z0-9-]{1,23}$"
+    message: "A team handle: lowercase, 2-24 characters."
+
+  - type: select
+    key: env
+    title: "Environment"
+    default: staging
+    options:
+      - value: dev
+        label: Development
+        description: nobody is paged for this one
+      - value: staging
+        label: Staging
+        description: production data shapes, no production traffic
+      - value: prod
+        label: Production
+        description: real users, real pager

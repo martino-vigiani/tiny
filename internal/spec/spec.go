@@ -40,7 +40,11 @@ const (
 // it looks.
 type Wizard struct {
 	Theme *theme.Theme `yaml:"theme,omitempty"`
-	Steps []Step       `yaml:"steps"`
+	// Include lists other spec files whose steps come first. It is resolved by
+	// ParseFile and is always empty afterwards; see include.go for the
+	// confinement rules, which are what keep a spec inert.
+	Include []string `yaml:"include,omitempty"`
+	Steps   []Step   `yaml:"steps"`
 }
 
 // Step is a single interactive question in the wizard.
@@ -124,10 +128,20 @@ type Step struct {
 func (s Step) Condition() *Condition { return s.cond }
 
 // Parse decodes a wizard spec from YAML bytes and validates it.
+//
+// Bytes have no directory, so a spec parsed this way — piped in on stdin,
+// embedded, composed in memory — cannot include another file. Saying so is
+// better than resolving against whatever the working directory happens to be,
+// which would make the same spec mean different things depending on where it
+// was run.
 func Parse(data []byte) (*Wizard, error) {
 	var w Wizard
 	if err := yaml.Unmarshal(data, &w); err != nil {
 		return nil, fmt.Errorf("parsing wizard yaml: %w", err)
+	}
+	if len(w.Include) > 0 {
+		return nil, fmt.Errorf("include: only a wizard loaded from a file can include another; "+
+			"this one has no directory to resolve %q against", w.Include[0])
 	}
 	if err := w.Validate(); err != nil {
 		return nil, err
@@ -400,23 +414,26 @@ func (s Step) Prompt() string {
 // equal to another option's value would make one typed answer mean two things,
 // and which one won would depend on the order the lookup happened to scan in.
 func validateNoDuplicateOptions(s Step) error {
-	seen := make(map[string]bool, len(s.Options))
-	for _, opt := range s.Options {
+	seen := make(map[string]int, len(s.Options))
+	for i, opt := range s.Options {
 		lo := strings.ToLower(opt)
-		if seen[lo] {
+		if _, dup := seen[lo]; dup {
 			return fmt.Errorf("step %q: duplicate option %q (case-insensitive)", s.Key, opt)
 		}
-		seen[lo] = true
+		seen[lo] = i
 	}
-	for _, label := range s.Labels {
+	for i, label := range s.Labels {
 		if label == "" {
 			continue
 		}
 		lo := strings.ToLower(label)
-		if seen[lo] {
-			return fmt.Errorf("step %q: label %q collides with another option (case-insensitive)", s.Key, label)
+		// A label matching its own value is not a collision: `value: staging`
+		// with `label: Staging` is one option under one name, capitalised.
+		if owner, dup := seen[lo]; dup && owner != i {
+			return fmt.Errorf("step %q: label %q collides with option %q (case-insensitive)",
+				s.Key, label, s.Options[owner])
 		}
-		seen[lo] = true
+		seen[lo] = i
 	}
 	return nil
 }
