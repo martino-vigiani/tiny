@@ -197,13 +197,21 @@ frames is why people turn spinners off.
 
 ## With a coding agent
 
-An agent cannot answer a prompt for you: its shell usually has no terminal at
-all. What it can do is **write** the interaction — generate `deploy.yaml`, wire
-it into your Makefile, and check that it resolves with `tiny -defaults` — all
-without a terminal, because the interaction is a file rather than code that has
-to be run to be read.
+Ask for it in one sentence:
 
-**[AGENT-GUIDE.md](AGENT-GUIDE.md)** is the page to hand it: the TTY check, a
+> Add a tiny wizard to `deploy.sh`: environment, version, and a confirm before
+> deploying. Check it with `tiny -defaults`.
+
+An agent can finish that without ever answering a single prompt, because the
+questions are a **file** it writes and verifies, not code that has to be run to
+be read. `tiny -defaults` resolves the whole thing with no terminal, which is
+exactly what an agent's shell has.
+
+This was tested rather than assumed: an agent was given these docs, forbidden
+from reading any of the source, and asked to build a release gate. It worked on
+the first run — and the three things it could not find in the docs are fixed.
+
+Hand it **[AGENT-GUIDE.md](AGENT-GUIDE.md)**: the one-paragraph contract, a
 block to paste into `CLAUDE.md` or `AGENTS.md`, and the mistakes to avoid.
 
 ## What it costs
