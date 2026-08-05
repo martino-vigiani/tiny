@@ -16,6 +16,9 @@ the UI, and the UI is finally yours.
   `theme:` block, `$TINY_THEME`, `-theme`. A wizard author suggests a look; the
   person running it decides.
 - `-theme <preset|file>`, `-no-color`, `-list-themes`, `-o <file>` flags.
+- **`tiny -` reads the spec from stdin**, so a caller composing a question no
+  longer has to invent a temp file. The answers then come from `/dev/tty`, and
+  fall back to defaults where there is no terminal.
 - `$TINY_THEME` and `$NO_COLOR` support ([no-color.org](https://no-color.org)).
 - `themes/brand.yaml`, a documented template for fitting tiny into another CLI,
   and `themes/dracula.yaml` as a truecolor example.
@@ -50,6 +53,20 @@ the UI, and the UI is finally yours.
 - `multiselect` marks the options its default preselects, instead of showing an
   unmarked list.
 - The `number` prompt no longer runs its range hint into the caret.
+
+### Performance
+
+- The JSON encoder is hand-written and `encoding/json` is gone from the binary
+  (-152 KB, 5% of the shipped size). Output is byte-identical, pinned by a
+  fuzzed parity test that checks against `encoding/json` itself — imported by
+  the test only. The fuzzing caught four escapes a hand-rolled encoder gets
+  wrong, including invalid UTF-8, which would have emitted invalid JSON.
+- Case-insensitive option matching uses `strings.EqualFold` instead of
+  lowercasing both sides, and the lookup maps in `select`/`multiselect` are
+  gone: `select` 25 → 2 allocs/op, `multiselect` 27 → 4, and 55 → 5 when the
+  step has a default.
+- Rendering a step allocates nothing: the render helpers append into a reusable
+  buffer and write once. Header, option list and table are all 0 allocs/op.
 
 ### Changed
 

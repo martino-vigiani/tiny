@@ -423,7 +423,26 @@ Display tabular data; optionally pick a row.
 
 ```
 tiny [flags] <wizard.yaml>
+tiny [flags] -                 # read the spec from stdin
 ```
+
+Passing `-` instead of a path reads the spec from stdin, so a caller composing a
+wizard does not need a temp file:
+
+```sh
+answers="$(tiny - <<'YAML'
+steps:
+  - type: confirm
+    key: deploy
+    title: "Deploy now?"
+    default: "no"
+YAML
+)"
+```
+
+Because stdin then carries the spec, the answers are read from `/dev/tty`. Where
+there is no terminal — CI, a hook, a cron job — there is nothing to read and every
+step falls back to its default, exactly as under `-defaults`.
 
 | Flag          | Meaning                                                        |
 |---------------|----------------------------------------------------------------|

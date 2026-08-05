@@ -24,8 +24,9 @@ runtime dependencies. Do not run `go mod tidy` unless you actually changed impor
 ## Architecture
 
 ```
-cmd/tiny/main.go        Entry point: flag parsing, file read, spec.Parse, theme
-                        resolution, signal handling, exit codes, payload writing.
+cmd/tiny/main.go        Entry point: flag parsing, spec read (file or stdin via
+                        "-"), spec.Parse, theme resolution, the answer source,
+                        signal handling, exit codes, payload writing.
 internal/spec/          Single source of truth for the schema and validation:
                         Wizard/Step structs, Validate(), and the default-resolution
                         helpers shared by widgets and the headless runner.
@@ -152,6 +153,15 @@ picks it up automatically.
   already concatenated with their ANSI escapes, so drawing a step does no formatting.
   Reintroducing `fmt.Sprintf` into a render helper undoes that — benchmark before and after
   with `go test -bench . -benchmem ./...`.
+- **Case-insensitive matching scans with `strings.EqualFold`.** Lowering both
+  sides allocates one string per option per comparison, in the helpers every
+  widget calls; and a lowercase lookup map costs more to build than an option
+  list of a handful of entries ever saves in lookups. `spec.CanonicalOption` and
+  `widgets.indexFold` are the two scans — use them instead of adding a third.
+- **A multiselect's default is resolved once.** `spec.MarkOptions` returns the
+  `[]bool` mask, which both the list rendering and the answer are derived from
+  (`spec.OptionsFor`). Resolving it separately for display and for the result is
+  what made this widget the allocation outlier.
 - `-format env` output is shell-quoted and its keys are normalised
   (`internal/runner/runner.go`). Answers are arbitrary user text: never emit one into a
   `KEY=VALUE` line without `shellQuote`.
