@@ -121,12 +121,13 @@ printf '2\nn\n' | tiny wizard.yaml    # piped, no TTY needed
 | `-plain` | Ask one line at a time instead of drawing a live prompt. |
 | `-set key=value` | Pre-seed one answer (repeatable); the rest take their defaults. |
 | `-answers <file>` | Pre-seed answers from a JSON or YAML file. |
+| `-tty` | Read answers from `/dev/tty` — for a git hook, whose stdin is already spoken for. |
 | `-version`, `-h` | Version, usage. |
 
 Environment: `TINY_THEME` (preset name or path), `NO_COLOR`.
 
 Exit codes: `0` success · `1` execution or spec error · `2` usage error ·
-`3` `-require-tty` with no terminal.
+`3` `-require-tty` with no terminal · `4` cancelled by the user.
 
 **When nobody is there to answer** — CI, a hook, an agent's sandboxed shell —
 every step falls back to its default and `tiny` says so on stderr. Pass

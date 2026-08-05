@@ -47,6 +47,7 @@ func run(args []string) int {
 	output := fs.String("o", "", "write the answers to this file instead of stdout")
 	listThemes := fs.Bool("list-themes", false, "print the built-in theme presets and exit")
 	requireTTY := fs.Bool("require-tty", false, "fail instead of falling back to defaults when there is no terminal")
+	useTTY := fs.Bool("tty", false, "read answers from /dev/tty, leaving stdin to whatever is already using it")
 	compact := fs.Bool("compact", false, "print the JSON payload on one line")
 	plain := fs.Bool("plain", false, "disable the interactive prompt; ask one line at a time")
 	var sets repeatable
@@ -64,6 +65,7 @@ func run(args []string) int {
 			"so `tiny w.yaml | jq` works while the user still sees the prompts.\n"+
 			"\nEnvironment:\n"+
 			"  TINY_THEME    theme preset name or path, overridden by -theme\n"+
+			"  TINY_PLAIN    any value disables the live interactive prompt\n"+
 			"  NO_COLOR      any value disables colors\n"+
 			"\nSee README.md for the wizard YAML format and THEMING.md for themes;\n"+
 			"ready-made specs live in examples/ and themes in themes/.\n")
@@ -156,7 +158,7 @@ func run(args []string) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	in, closeIn, haveInput := answerSource(fs.Arg(0) == "-")
+	in, closeIn, haveInput := answerSource(*useTTY || fs.Arg(0) == "-")
 	defer closeIn()
 
 	isTTY := term.IsTerminal(int(in.Fd()))
@@ -197,6 +199,13 @@ func run(args []string) int {
 		err = flushErr
 	}
 	if err != nil {
+		// A cancelled wizard is not a broken one. A gate that has to tell
+		// "the user said no" from "the spec is wrong" can only do it by the
+		// exit code, since both write to stderr.
+		if errors.Is(err, context.Canceled) {
+			fmt.Fprintf(os.Stderr, "tiny: cancelled\n")
+			return 4
+		}
 		fmt.Fprintf(os.Stderr, "tiny: %v\n", err)
 		return 1
 	}
@@ -230,8 +239,9 @@ func readSpec(path string) ([]byte, error) {
 
 // answerSource returns the file the wizard reads answers from.
 //
-// Normally that is stdin. When the spec itself arrived on stdin, stdin is spent,
-// so the answers have to come from the terminal directly: tiny opens /dev/tty.
+// Normally that is stdin. When stdin is spoken for — the spec arrived on it, or
+// the caller passed -tty because something else owns it, as a git pre-push hook
+// owns its ref list — the answers come from the terminal directly.
 // Where there is no terminal — CI, a cron job — there is nothing to read and
 // every step falls back to its default, which is exactly what -defaults does.
 // It also reports whether anything can actually be read: false means every step

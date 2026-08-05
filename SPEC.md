@@ -474,6 +474,9 @@ step falls back to its default, exactly as under `-defaults`.
 | `-require-tty`| Exit 3 instead of resolving every step to its default when there is no terminal. |
 | `-compact`    | Print the JSON payload on one line.                            |
 | `-plain`      | Ask one line at a time instead of drawing a live prompt.        |
+| `-tty`        | Read answers from `/dev/tty`, leaving stdin to whatever owns it. |
+| `-set`        | Pre-seed one answer as `key=value`; repeatable.                 |
+| `-answers`    | Pre-seed answers from a JSON or YAML file.                      |
 | `-version`    | Print `tiny v0.3.0` and exit.                                  |
 | `-h`          | Print usage and exit.                                          |
 
@@ -493,6 +496,7 @@ Environment variables:
 | `1`  | Execution errors: unreadable file, invalid wizard spec, step failure. |
 | `2`  | Usage errors: unknown flag, wrong number of args, invalid `-format`. |
 | `3`  | `-require-tty` was passed and there is no terminal to answer from.   |
+| `4`  | The user cancelled the wizard (Ctrl-C at a prompt).                  |
 
 ### Pipe / headless behavior
 
