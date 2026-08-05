@@ -18,11 +18,14 @@ func (inputWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, error) 
 		return nil, ctx.Err()
 	}
 	PrintHeader(env, s.Prompt())
+	// The hints depend only on the step and the theme, so they are built once
+	// rather than on every retry.
+	hints := inputHints(env, s)
 	for {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		PrintPrompt(env, inputHints(env, s))
+		PrintPrompt(env, hints)
 		line, eof, err := ReadInput(env)
 		if err != nil {
 			return nil, err

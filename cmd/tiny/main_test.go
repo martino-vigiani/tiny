@@ -126,6 +126,39 @@ func TestStdoutCarriesOnlyThePayload(t *testing.T) {
 	}
 }
 
+// A caller should never have to invent a temp file just to ask a question:
+// piping the spec in must work, and the answers must still come back on stdout.
+func TestSpecFromStdin(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds the binary; skipped under -short")
+	}
+	bin := filepath.Join(t.TempDir(), "tiny")
+	build := exec.Command("go", "build", "-o", bin, ".")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("building tiny: %v\n%s", err, out)
+	}
+
+	const spec = `
+steps:
+  - type: select
+    key: framework
+    title: "Framework"
+    options: [SwiftUI, UIKit]
+    default: SwiftUI
+`
+	cmd := exec.Command(bin, "-defaults", "-")
+	cmd.Stdin = strings.NewReader(spec)
+	var stdout, stderr strings.Builder
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("running tiny: %v\nstderr: %s", err, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"framework": "SwiftUI"`) {
+		t.Errorf("stdout = %q, want the answers for the piped spec", stdout.String())
+	}
+}
+
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {

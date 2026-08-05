@@ -14,27 +14,15 @@ func init() {
 
 type multiselectWidget struct{}
 
-// preselected reports, per option, whether the step's default selects it, so
-// the list can show what pressing enter would answer. An unparsable default
-// marks nothing rather than failing: Run resolves it properly later.
-func preselected(s spec.Step) []bool {
+// defaultMarks reports, per option, which ones the step's default selects, so
+// the list can show what pressing enter would answer — and so Run can turn the
+// same mask into the answer without resolving the default twice.
+func defaultMarks(s spec.Step) ([]bool, error) {
 	items, err := spec.SplitMultiDefault(s.Default)
-	if err != nil || len(items) == 0 {
-		return nil
+	if err != nil {
+		return nil, err
 	}
-	chosen := spec.OrderByOptions(items, s.Options)
-	if len(chosen) == 0 {
-		return nil
-	}
-	set := make(map[string]bool, len(chosen))
-	for _, c := range chosen {
-		set[c] = true
-	}
-	marks := make([]bool, len(s.Options))
-	for i, opt := range s.Options {
-		marks[i] = set[opt]
-	}
-	return marks
+	return spec.MarkOptions(items, s.Options), nil
 }
 
 func (multiselectWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, error) {
@@ -42,11 +30,10 @@ func (multiselectWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, e
 		return nil, err
 	}
 	PrintHeader(env, s.Prompt())
-	PrintListMarked(env, s.Options, preselected(s))
-	lower := make(map[string]string, len(s.Options))
-	for _, opt := range s.Options {
-		lower[strings.ToLower(opt)] = opt
-	}
+	// The default is resolved once: it decides both what the list shows as
+	// preselected and what an empty answer returns.
+	marks, defErr := defaultMarks(s)
+	PrintListMarked(env, s.Options, marks)
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -57,13 +44,12 @@ func (multiselectWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, e
 			return nil, err
 		}
 		if eof || line == "" {
-			items, err := spec.SplitMultiDefault(s.Default)
-			if err != nil {
-				return nil, err
+			if defErr != nil {
+				return nil, defErr
 			}
-			return spec.OrderByOptions(items, s.Options), nil
+			return spec.OptionsFor(marks, s.Options), nil
 		}
-		selected := map[string]bool{}
+		selected := make([]bool, len(s.Options))
 		all := false
 		valid := true
 		for _, tok := range strings.Split(line, ",") {
@@ -78,15 +64,15 @@ func (multiselectWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, e
 			}
 			if lt == "none" {
 				all = false
-				selected = map[string]bool{}
+				clear(selected)
 				continue
 			}
 			if n, err := strconv.Atoi(t); err == nil && n >= 1 && n <= len(s.Options) {
-				selected[s.Options[n-1]] = true
+				selected[n-1] = true
 				continue
 			}
-			if canon, ok := lower[lt]; ok {
-				selected[canon] = true
+			if i := indexFold(s.Options, t); i >= 0 {
+				selected[i] = true
 				continue
 			}
 			valid = false
@@ -96,16 +82,10 @@ func (multiselectWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, e
 			continue
 		}
 		if all {
-			for _, opt := range s.Options {
-				selected[opt] = true
+			for i := range selected {
+				selected[i] = true
 			}
 		}
-		out := make([]string, 0, len(s.Options))
-		for _, opt := range s.Options {
-			if selected[opt] {
-				out = append(out, opt)
-			}
-		}
-		return out, nil
+		return spec.OptionsFor(selected, s.Options), nil
 	}
 }

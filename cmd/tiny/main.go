@@ -41,7 +41,7 @@ func run(args []string) int {
 	listThemes := fs.Bool("list-themes", false, "print the built-in theme presets and exit")
 	showVersion := fs.Bool("version", false, "print version and exit")
 	fs.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage:\n  tiny [flags] <wizard.yaml>\n\nFlags:\n")
+		fmt.Fprintf(os.Stderr, "Usage:\n  tiny [flags] <wizard.yaml>\n  tiny [flags] -            read the spec from stdin (answers come from /dev/tty)\n\nFlags:\n")
 		fs.PrintDefaults()
 		fmt.Fprintf(os.Stderr, "\nThe wizard is drawn on stderr and the answers are written to stdout,\n"+
 			"so `tiny w.yaml | jq` works while the user still sees the prompts.\n"+
@@ -79,9 +79,9 @@ func run(args []string) int {
 		return 2
 	}
 
-	data, err := os.ReadFile(fs.Arg(0))
+	data, err := readSpec(fs.Arg(0))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "tiny: cannot read %s: %v\n", fs.Arg(0), err)
+		fmt.Fprintf(os.Stderr, "tiny: %v\n", err)
 		return 1
 	}
 	wiz, err := spec.Parse(data)
@@ -99,10 +99,13 @@ func run(args []string) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	in, closeIn := answerSource(fs.Arg(0) == "-")
+	defer closeIn()
+
 	// The UI goes to stderr; stdout carries only the answers.
 	ui := bufio.NewWriter(os.Stderr)
-	isTTY := term.IsTerminal(int(os.Stdin.Fd()))
-	r := runner.New(os.Stdin, ui, int(os.Stdin.Fd()), isTTY)
+	isTTY := term.IsTerminal(int(in.Fd()))
+	r := runner.New(in, ui, int(in.Fd()), isTTY)
 	r.SetTheme(resolved)
 
 	var answers map[string]any
@@ -124,6 +127,55 @@ func run(args []string) int {
 		return 1
 	}
 	return 0
+}
+
+// readSpec reads the wizard spec from path, or from stdin when path is "-".
+//
+// Reading from stdin is what makes tiny usable without touching the disk: a
+// caller — a script, or an agent that just composed a question — can pipe a
+// heredoc straight in instead of inventing a temp file for every interaction.
+func readSpec(path string) ([]byte, error) {
+	if path == "-" {
+		data, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return nil, fmt.Errorf("cannot read the spec from stdin: %w", err)
+		}
+		return data, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("cannot read %s: %w", path, err)
+	}
+	return data, nil
+}
+
+// answerSource returns the file the wizard reads answers from.
+//
+// Normally that is stdin. When the spec itself arrived on stdin, stdin is spent,
+// so the answers have to come from the terminal directly: tiny opens /dev/tty.
+// Where there is no terminal — CI, a cron job — there is nothing to read and
+// every step falls back to its default, which is exactly what -defaults does.
+func answerSource(specOnStdin bool) (*os.File, func()) {
+	if !specOnStdin {
+		return os.Stdin, func() {}
+	}
+	tty, err := os.Open("/dev/tty")
+	if err != nil {
+		return emptyInput()
+	}
+	return tty, func() { tty.Close() }
+}
+
+// emptyInput returns a file that is already at EOF, so widgets apply their
+// defaults instead of blocking on input that can never arrive.
+func emptyInput() (*os.File, func()) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		// Nothing left to fall back to; stdin is spent but still a valid fd.
+		return os.Stdin, func() {}
+	}
+	w.Close()
+	return r, func() { r.Close() }
 }
 
 // writeAnswers serialises answers in the requested format to path, or to

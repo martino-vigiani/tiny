@@ -331,6 +331,19 @@ func Hint(env *Env, text string) string {
 	return t.HintOpen + text + t.HintClose
 }
 
+// indexFold returns the position of the first option equal to value, ignoring
+// case, or -1. Widgets scan instead of indexing a lowercased map: an option
+// list is a handful of entries typed once, so building the map costs more than
+// the lookups ever save.
+func indexFold(options []string, value string) int {
+	for i, opt := range options {
+		if strings.EqualFold(opt, value) {
+			return i
+		}
+	}
+	return -1
+}
+
 // WriteUI writes a raw string to the UI stream. Widgets that need a literal
 // newline or an editor's passthrough output use it; everything themable should
 // go through the Print* helpers instead.

@@ -404,35 +404,55 @@ func ValidateDateString(def, format string) error {
 
 // CanonicalOption returns the canonical casing of value among options,
 // matching case-insensitively, and whether it was found.
+//
+// This is the most-called helper in the package, so it scans with EqualFold
+// rather than lowering both sides: the old form allocated one string per
+// option on every call.
 func CanonicalOption(value string, options []string) (string, bool) {
-	lo := strings.ToLower(value)
 	for _, opt := range options {
-		if strings.ToLower(opt) == lo {
+		if strings.EqualFold(opt, value) {
 			return opt, true
 		}
 	}
 	return "", false
 }
 
-// OrderByOptions returns the items from selected that appear in options,
-// deduplicated and ordered by their position in options. Matching is
-// case-insensitive; the canonical option casing is used in the result.
-func OrderByOptions(selected, options []string) []string {
-	lower := make(map[string]string, len(options))
-	for _, opt := range options {
-		lower[strings.ToLower(opt)] = opt
+// MarkOptions reports, per option, whether selected contains it. It is the
+// natural shape for a multiselect: the caller can render the mask directly and
+// turn it into an answer with OptionsFor, without building intermediate maps.
+//
+// Matching is case-insensitive, and an item that is not an option is ignored.
+func MarkOptions(selected, options []string) []bool {
+	if len(selected) == 0 || len(options) == 0 {
+		return nil
 	}
-	sel := make(map[string]bool, len(selected))
+	marks := make([]bool, len(options))
 	for _, item := range selected {
-		if canon, ok := lower[strings.ToLower(item)]; ok {
-			sel[canon] = true
+		for i, opt := range options {
+			if strings.EqualFold(opt, item) {
+				marks[i] = true
+				break
+			}
 		}
 	}
+	return marks
+}
+
+// OptionsFor returns the marked options, in the order they appear in options
+// and with their canonical casing.
+func OptionsFor(marks []bool, options []string) []string {
 	out := make([]string, 0, len(options))
-	for _, opt := range options {
-		if sel[opt] {
+	for i, opt := range options {
+		if i < len(marks) && marks[i] {
 			out = append(out, opt)
 		}
 	}
 	return out
+}
+
+// OrderByOptions returns the items from selected that appear in options,
+// deduplicated and ordered by their position in options. Matching is
+// case-insensitive; the canonical option casing is used in the result.
+func OrderByOptions(selected, options []string) []string {
+	return OptionsFor(MarkOptions(selected, options), options)
 }

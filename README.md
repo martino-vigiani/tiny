@@ -69,6 +69,9 @@ No runtime dependencies, no config file, nothing to install alongside it.
 
 ```sh
 tiny wizard.yaml                      # interactive; JSON on stdout
+tiny - <<'YAML'                       # spec from stdin, no temp file
+steps: [{type: input, key: name, title: "Name"}]
+YAML
 tiny -defaults wizard.yaml            # headless: uses every default, reads nothing
 tiny -format env wizard.yaml          # KEY=VALUE, shell-quoted
 tiny -format yaml wizard.yaml         # YAML

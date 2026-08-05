@@ -12,6 +12,30 @@ agent writes wizard.yaml  →  tiny renders it  →  agent reads JSON from stdou
 The same file runs unattended in CI (`-defaults`), so an interaction an agent
 designs for a human also works in a pipeline with nobody watching.
 
+## No temp file needed
+
+An agent composing a question does not have to invent a path, write it, run it
+and clean it up. Pipe the spec in with `-`:
+
+```sh
+answers="$(tiny - <<'YAML'
+steps:
+  - type: select
+    key: framework
+    title: "UI framework"
+    options: [SwiftUI, UIKit]
+    default: SwiftUI
+YAML
+)"
+```
+
+The spec arrives on stdin, so tiny reads the *answers* from `/dev/tty` — the
+user still types normally. Where there is no terminal (CI, a hook, a cron job)
+every step falls back to its default, exactly as with `-defaults`.
+
+Write a file instead when the interaction is worth keeping: a spec in the repo
+is reviewable, diffable and re-runnable, which a heredoc is not.
+
 ## The contract, in five lines
 
 ```sh

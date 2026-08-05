@@ -3,7 +3,6 @@ package widgets
 import (
 	"context"
 	"strconv"
-	"strings"
 
 	"github.com/martino-vigiani/tiny/internal/spec"
 )
@@ -19,10 +18,6 @@ func (selectWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, error)
 		return nil, err
 	}
 	PrintHeader(env, s.Prompt())
-	lower := make(map[string]string, len(s.Options))
-	for _, opt := range s.Options {
-		lower[strings.ToLower(opt)] = opt
-	}
 	def, hasDef := selectDefault(s)
 	defIdx := -1
 	if hasDef {
@@ -61,8 +56,8 @@ func (selectWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, error)
 		if n, err := strconv.Atoi(line); err == nil && n >= 1 && n <= len(s.Options) {
 			return s.Options[n-1], nil
 		}
-		if canon, ok := lower[strings.ToLower(line)]; ok {
-			return canon, nil
+		if i := indexFold(s.Options, line); i >= 0 {
+			return s.Options[i], nil
 		}
 		PrintErrorf(env, "Invalid choice, pick a number between 1 and %d.", len(s.Options))
 	}
