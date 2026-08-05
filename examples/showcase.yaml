@@ -45,7 +45,7 @@ steps:
   - type: input
     key: service
     title: "Service name"
-    placeholder: "aurora-api"
+    placeholder: "my-service"
     default: "aurora-api"
     pattern: "^[a-z][a-z0-9-]{2,23}$"
     message: "Lowercase letters, digits and dashes; 3-24 characters."

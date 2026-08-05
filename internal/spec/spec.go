@@ -178,6 +178,17 @@ func (s *Step) parseCondition(earlier map[string]bool) error {
 	return nil
 }
 
+// AllStepTypes returns every step type the schema defines. Validation and the
+// tests derive their lists from it, so a type added to the const block cannot
+// be quietly missed by one of them.
+func AllStepTypes() []StepType {
+	return []StepType{
+		TypeSelect, TypeMultiselect, TypeConfirm, TypeInput, TypePassword,
+		TypeSearch, TypeNumber, TypeDate, TypeKeyValue, TypeEditor,
+		TypeAutocomplete, TypeTable, TypeFile,
+	}
+}
+
 // Match modes for the filtering steps.
 const (
 	MatchSubstring = "substring"

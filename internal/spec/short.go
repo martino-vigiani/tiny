@@ -47,6 +47,7 @@ var shortTypes = map[string]StepType{
 	"keyvalue":     TypeKeyValue,
 	"editor":       TypeEditor,
 	"autocomplete": TypeAutocomplete,
+	"file":         TypeFile,
 }
 
 // IsShortType reports whether word starts a short-form wizard rather than
@@ -59,7 +60,7 @@ func IsShortType(word string) bool {
 
 // ShortTypeNames lists the expressible types, sorted, for error messages.
 func ShortTypeNames() string {
-	return "select|multiselect|confirm|input|password|search|number|date|keyvalue|editor|autocomplete"
+	return "select|multiselect|confirm|input|password|search|number|date|keyvalue|editor|autocomplete|file"
 }
 
 // ParseShort builds a wizard from argv words.
@@ -97,7 +98,9 @@ var attrArity = map[string]int{
 	"--min": 1, "--max": 1, "--increment": 1, "--format": 1, "--editor": 1,
 	"--delimiter": 1, "--height": 1, "--when": 1, "--pattern": 1,
 	"--message": 1, "--min-length": 1, "--max-length": 1,
-	"--required": 0,
+	"--match": 1, "--min-select": 1, "--max-select": 1, "--root": 1,
+	"--return-column": 1,
+	"--required": 0, "--allow-custom": 0, "--dirs": 0, "--hidden": 0,
 }
 
 func parseShortStep(words []string, n int) (Step, error) {
@@ -204,6 +207,15 @@ func setFlagAttr(s *Step, name string) error {
 	case "--required":
 		s.Required = true
 		return nil
+	case "--allow-custom":
+		s.AllowCustom = true
+		return nil
+	case "--dirs":
+		s.Dirs = true
+		return nil
+	case "--hidden":
+		s.Hidden = true
+		return nil
 	default:
 		return fmt.Errorf("unknown flag %s", name)
 	}
@@ -229,6 +241,10 @@ func setValueAttr(s *Step, name, value string) error {
 		s.When = value
 	case "--pattern":
 		s.Pattern = value
+	case "--match":
+		s.Match = value
+	case "--root":
+		s.Root = value
 	case "--message":
 		s.Message = value
 	case "--min":
@@ -267,6 +283,24 @@ func setValueAttr(s *Step, name, value string) error {
 			return err
 		}
 		s.MaxLength = n
+	case "--min-select":
+		n, err := parseIntAttr(name, value)
+		if err != nil {
+			return err
+		}
+		s.MinSelect = n
+	case "--max-select":
+		n, err := parseIntAttr(name, value)
+		if err != nil {
+			return err
+		}
+		s.MaxSelect = n
+	case "--return-column":
+		n, err := parseIntAttr(name, value)
+		if err != nil {
+			return err
+		}
+		s.ReturnColumn = n
 	default:
 		return fmt.Errorf("unknown attribute %s", name)
 	}
@@ -295,7 +329,9 @@ func validAttrs(t StepType) string {
 	common := "--title --prompt --default --required --when"
 	switch t {
 	case TypeSelect, TypeSearch, TypeAutocomplete, TypeMultiselect:
-		return common + " --height"
+		return common + " --height --match --allow-custom --min-select --max-select"
+	case TypeFile:
+		return common + " --root --dirs --hidden --height"
 	case TypeNumber:
 		return common + " --min --max --increment"
 	case TypeDate:

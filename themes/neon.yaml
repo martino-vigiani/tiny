@@ -1,0 +1,50 @@
+# neon — a maximalist truecolor theme. Loud on purpose.
+#
+#   tiny -theme themes/neon.yaml examples/showcase.yaml
+#   TINY_THEME=themes/neon.yaml tiny wizard.yaml
+#
+# Needs a terminal with 24-bit color. Anywhere else the colors degrade and the
+# symbols still work; with NO_COLOR the wizard asks exactly the same questions.
+name: neon
+preset: sleek
+color: auto
+
+symbols:
+  # The title is drawn as a filled chip: the padding lives inside the style,
+  # so the background paints it. The leading newline stays outside.
+  header_prefix: "\n  "
+  header_suffix: "  \n"
+
+  prompt: "▶ "
+  indent: "  "
+  default_marker: "◆"
+  item_marker: "◇"
+  bullet: ")"
+  error_prefix: "✗ "
+  note_prefix: "· "
+  hint_open: "["
+  hint_close: "]"
+  table_rule: "━"
+
+  # Interactive only.
+  cursor: "▐ "
+  cursor_blank: "  "
+  checked: "▣ "
+  unchecked: "▢ "
+  # The caret has no style of its own, so it carries its color inline.
+  caret: "\e[38;2;255;45;149m▊\e[0m"
+  ellipsis: "…"
+
+styles:
+  header: "bold #0d0018 bg-#ff2d95"   # magenta chip, near-black text
+  prompt: "bold #00f0ff"              # electric cyan
+  option: "#c9c2ff"                   # pale violet
+  index: "#7a5cff"                    # violet
+  marker: "bold #39ff14"              # laser green
+  hint: "#ff7ad9"                     # pink
+  note: "#7d6bb5"                     # muted violet
+  error: "bold #ff1f4b"               # alarm red
+  table_header: "bold underline #ffe100"
+  cursor: "bold #ffe100"              # the row under the cursor: yellow
+  selected: "bold #39ff14"            # the checkbox marks
+  filter: "bold #00f0ff"              # what you type

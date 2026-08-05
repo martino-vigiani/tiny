@@ -227,3 +227,50 @@ steps:
 		t.Fatalf("comma-separated multiselect default should validate: %v", err)
 	}
 }
+
+// Every step type must be handled by validation. A type added to the const
+// block without a branch in validate() would otherwise be rejected as
+// "unsupported" only at the moment a user runs it.
+func TestEveryTypeIsValidatable(t *testing.T) {
+	minimal := map[StepType]string{
+		TypeSelect:       "options: [a]",
+		TypeMultiselect:  "options: [a]",
+		TypeSearch:       "options: [a]",
+		TypeAutocomplete: "options: [a]",
+		TypeTable:        "headers: [a]",
+	}
+	for _, typ := range AllStepTypes() {
+		yaml := "steps:\n  - type: " + string(typ) + "\n    key: k\n    title: K\n"
+		if extra, ok := minimal[typ]; ok {
+			yaml += "    " + extra + "\n"
+		}
+		if _, err := Parse([]byte(yaml)); err != nil {
+			t.Errorf("a minimal %s step was rejected: %v", typ, err)
+		}
+	}
+}
+
+// And every type must resolve headless, or a wizard using it cannot run in CI.
+func TestEveryTypeResolvesHeadless(t *testing.T) {
+	minimal := map[StepType]string{
+		TypeSelect:       "options: [a]\n    default: a",
+		TypeMultiselect:  "options: [a]",
+		TypeSearch:       "options: [a]\n    default: a",
+		TypeAutocomplete: "options: [a]\n    default: a",
+		TypeTable:        "headers: [a]",
+	}
+	for _, typ := range AllStepTypes() {
+		yaml := "steps:\n  - type: " + string(typ) + "\n    key: k\n    title: K\n"
+		if extra, ok := minimal[typ]; ok {
+			yaml += "    " + extra + "\n"
+		}
+		wiz, err := Parse([]byte(yaml))
+		if err != nil {
+			t.Errorf("%s: %v", typ, err)
+			continue
+		}
+		if len(wiz.Steps) != 1 {
+			t.Errorf("%s: parsed %d steps", typ, len(wiz.Steps))
+		}
+	}
+}

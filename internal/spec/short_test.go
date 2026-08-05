@@ -103,11 +103,10 @@ func TestShortFormEquivalence(t *testing.T) {
 // excluded, so a type added later cannot be silently forgotten.
 func TestShortFormCoversEveryType(t *testing.T) {
 	excluded := map[spec.StepType]bool{spec.TypeTable: true}
-	all := []spec.StepType{
-		spec.TypeSelect, spec.TypeMultiselect, spec.TypeConfirm, spec.TypeInput,
-		spec.TypePassword, spec.TypeSearch, spec.TypeNumber, spec.TypeDate,
-		spec.TypeKeyValue, spec.TypeEditor, spec.TypeAutocomplete, spec.TypeTable,
-	}
+	// Derived from the registry rather than listed by hand: this test exists to
+	// catch a type added without a decision about the short form, and a
+	// hand-maintained list is exactly the thing that would silently miss it.
+	all := spec.AllStepTypes()
 	for _, typ := range all {
 		expressible := spec.IsShortType(string(typ))
 		if excluded[typ] && expressible {
