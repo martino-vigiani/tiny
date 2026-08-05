@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -100,7 +101,7 @@ func TestStdoutCarriesOnlyThePayload(t *testing.T) {
 	if testing.Short() {
 		t.Skip("builds the binary; skipped under -short")
 	}
-	bin := filepath.Join(t.TempDir(), "tiny")
+	bin := filepath.Join(t.TempDir(), binaryName)
 	build := exec.Command("go", "build", "-o", bin, ".")
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("building tiny: %v\n%s", err, out)
@@ -132,7 +133,7 @@ func TestSpecFromStdin(t *testing.T) {
 	if testing.Short() {
 		t.Skip("builds the binary; skipped under -short")
 	}
-	bin := filepath.Join(t.TempDir(), "tiny")
+	bin := filepath.Join(t.TempDir(), binaryName)
 	build := exec.Command("go", "build", "-o", bin, ".")
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("building tiny: %v\n%s", err, out)
@@ -173,7 +174,7 @@ func TestShortFormEndToEnd(t *testing.T) {
 	if testing.Short() {
 		t.Skip("builds the binary; skipped under -short")
 	}
-	bin := filepath.Join(t.TempDir(), "tiny")
+	bin := filepath.Join(t.TempDir(), binaryName)
 	if out, err := exec.Command("go", "build", "-o", bin, ".").CombinedOutput(); err != nil {
 		t.Fatalf("building tiny: %v\n%s", err, out)
 	}
@@ -197,7 +198,7 @@ func TestPathBeatsShortTypeWhenQualified(t *testing.T) {
 		t.Skip("builds the binary; skipped under -short")
 	}
 	dir := t.TempDir()
-	bin := filepath.Join(dir, "tiny")
+	bin := filepath.Join(dir, binaryName)
 	if out, err := exec.Command("go", "build", "-o", bin, ".").CombinedOutput(); err != nil {
 		t.Fatalf("building tiny: %v\n%s", err, out)
 	}
@@ -214,3 +215,14 @@ func TestPathBeatsShortTypeWhenQualified(t *testing.T) {
 		t.Errorf("stdout = %q, want the file to have been read as a path", stdout.String())
 	}
 }
+
+// binaryName is what a freshly built tiny is called on this platform.
+// Windows will not exec a file without the .exe suffix, which is how four
+// end-to-end tests here failed the first time they ever ran on it — the repo
+// had only ever been built on macOS and Linux.
+var binaryName = func() string {
+	if runtime.GOOS == "windows" {
+		return "tiny.exe"
+	}
+	return "tiny"
+}()
