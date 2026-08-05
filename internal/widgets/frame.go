@@ -154,14 +154,19 @@ func cellWidth(s string) int {
 // implementation of UAX #11 — that needs a generated table — but it covers the
 // scripts a person actually puts in an option label, which is what stops the
 // redraw from breaking.
+// The zero-width cases come before the `r < 0x1100` fast path on purpose. They
+// used to sit after it, which made the combining-diacritical branch dead code —
+// 0x0300 is below 0x1100, so a combining mark was counted as a full column and
+// a decomposed "é" measured two cells instead of one. Everything downstream
+// clipped a column early on accented text without any way to see why.
 func runeCells(r rune) int {
 	switch {
-	case r < 0x1100:
-		return 1
 	case r >= 0x0300 && r <= 0x036f: // combining diacriticals
 		return 0
 	case r >= 0x200b && r <= 0x200f, r == 0xfeff: // zero-width and marks
 		return 0
+	case r < 0x1100:
+		return 1
 	case r >= 0x1100 && r <= 0x115f, // Hangul Jamo
 		r >= 0x2e80 && r <= 0x303e, // CJK radicals, Kangxi, punctuation
 		r >= 0x3041 && r <= 0x33ff, // Hiragana, Katakana, compat
