@@ -143,6 +143,9 @@ human gave is worse than an error.
 tiny demo                    # 20 steps, every type, colours and all
 tiny -theme minimal demo     # the same wizard, sober
 tiny -defaults demo | jq     # the same answers, headless
+./examples/tour.sh           # a guided tour of every feature, one screen at a time
+./examples/tour.sh paths     # or one section: hello argv themes fuzzy labels multi
+                             # validation demo headless paths meta streams inert
 ```
 
 The showcase is compiled into the binary, so it runs from any directory with
