@@ -1,9 +1,6 @@
 # tiny
 
-**The declarative terminal wizard. Write YAML, get JSON.**
-
-`tiny` is a single ~3 MB binary that turns a YAML file into an interactive
-terminal wizard and prints the answers as structured JSON.
+YAML in, JSON out, one interactive wizard in the terminal.
 
 ```yaml
 # wizard.yaml
@@ -33,50 +30,36 @@ $ tiny wizard.yaml | jq
 }
 ```
 
-## Why it exists
+<!-- MEDIA: terminal recording of `tiny wizard.yaml` being answered interactively, then piped to jq -->
 
-Every internal script has the same block of `read -p` at the top — and a
-`--yes` flag that duplicates every one of its defaults a second time.
+## Why
 
-`tiny` replaces both with one file: a human answers the questions, the pipeline
-runs the same file with `-defaults`, and both get the same JSON. An interaction
-becomes a **file** instead of code, so it can be generated, reviewed, diffed,
-versioned and verified before anyone runs it.
+Every internal script grows the same two things over time: a block of
+`read -p` prompts, and a `--yes` flag that duplicates every one of those
+prompts' defaults a second time, by hand, to keep CI working.
 
-Three properties do the work:
+`tiny` replaces both with one file. A human runs `tiny wizard.yaml` and
+answers it. CI runs the exact same file with `-defaults` and gets the exact
+same shape of answers, no interaction, no drift between the two paths. The
+interaction becomes a file — reviewable, diffable, generated if it needs to
+be — instead of a growing pile of shell.
 
-**One spec, two modes.** The same file runs interactively for a human and
-headless in CI with `-defaults`, returning the same shape of answers.
-`TestDefaultsInteractiveParity` enforces it.
+[gum](https://github.com/charmbracelet/gum) does the styled-prompt part of
+this well. It has no headless mode and no spec file: the questions live in
+your shell script, so there's still a `--yes` path to maintain by hand.
 
-**stdout is only the payload.** The wizard is drawn on stderr, so
-`tiny w.yaml | jq` works *while somebody is answering it*.
+## Cheap
 
-**Anyone can restyle it, nobody can restyle the output.** Themes control
-symbols and colors — never the questions or the JSON.
+Measured on this repo, not claimed:
 
-## Interactive
+- **3.0 MB** binary (`go build -trimpath -ldflags "-s -w"`, `du -h`).
+- **2 direct dependencies** — `golang.org/x/term` and `gopkg.in/yaml.v3` (see `go.mod`).
+- **Under 6 MB** peak resident memory and CPU time too small to register,
+  running a wizard headless (`/usr/bin/time -l tiny -defaults examples/quickstart.yaml`).
+- **341 tests**, all green (`go test ./...`).
 
-On a real terminal, `select`, `multiselect`, `search` and `autocomplete` draw a
-live prompt: arrow keys move the cursor, typing filters the list as you go,
-space toggles, and the frame redraws in place.
-
-```
-Framework
-❯ ▏ · type to filter
-❯ SwiftUI
-  UIKit
-  AppKit
-```
-
-Anywhere else — a pipe, CI, an agent's shell — the same wizard falls back to a
-numbered list, and `TestRichAnswersMatchLineMode` requires both ways of choosing
-to return the same value. Looks cannot change answers.
-
-It costs 5.9 ns and no allocation to decode a keystroke, one `write(2)` per
-frame, and nothing at all between keystrokes: there is no render loop, no
-polling and no goroutine — the process is simply blocked reading. Pass `-plain`
-(or set `TINY_PLAIN`) to ask one line at a time instead.
+No framework, no runtime dependency beyond the two above, nothing to
+install alongside it.
 
 ## Install
 
@@ -84,77 +67,64 @@ polling and no goroutine — the process is simply blocked reading. Pass `-plain
 go install github.com/martino-vigiani/tiny/cmd/tiny@latest
 ```
 
-Or build it:
+Or build from source:
 
 ```sh
-go build -trimpath -ldflags "-s -w" -o tiny ./cmd/tiny
+git clone https://github.com/martino-vigiani/tiny
+cd tiny && go build -trimpath -ldflags "-s -w" -o tiny ./cmd/tiny
 ```
 
-No runtime dependencies, no config file, nothing to install alongside it.
+There is no tagged release yet, so there are no prebuilt binaries to
+download — both commands above compile it locally.
 
-## Use it
+## Use it in a script
+
+[`examples/scaffold.sh`](examples/scaffold.sh) is a complete, working
+example: it writes a wizard spec, runs it, parses the answers with `jq`, and
+scaffolds a Swift project from them. It runs interactively by default and
+headless in CI with `--ci`:
 
 ```sh
-tiny demo                             # the built-in showcase, from anywhere
-tiny select framework SwiftUI UIKit   # the whole wizard as arguments
-tiny wizard.yaml                      # interactive; JSON on stdout
-tiny - <<'YAML'                       # spec from stdin, no temp file
-steps: [{type: input, key: name, title: "Name"}]
-YAML
-tiny -defaults wizard.yaml            # headless: uses every default, reads nothing
-tiny -format env wizard.yaml          # KEY=VALUE, shell-quoted
-tiny -format yaml wizard.yaml         # YAML
-tiny -o answers.json wizard.yaml      # write to a file instead of stdout
-tiny -theme sleek wizard.yaml         # a different look
-printf '2\nn\n' | tiny wizard.yaml    # piped, no TTY needed
+./examples/scaffold.sh          # interactive
+./examples/scaffold.sh --ci     # unattended, uses the YAML defaults
 ```
 
-| Flag | Meaning |
-| --- | --- |
-| `-defaults` | Run headless, resolving every step to its `default`. Reads nothing from stdin. |
-| `-format json\|yaml\|env` | Output format (default `json`). |
-| `-o <file>` | Write the answers to a file instead of stdout. |
-| `-theme <preset\|file>` | Draw with a preset or a theme file. |
-| `-no-color` | Disable ANSI colors (same as `NO_COLOR`). |
-| `-list-themes` | Print the built-in presets. |
-| `-require-tty` | Fail (exit 3) instead of silently taking every default when there is no terminal. |
-| `-compact` | Print the JSON payload on one line. |
-| `-plain` | Ask one line at a time instead of drawing a live prompt. |
-| `-set key=value` | Pre-seed one answer (repeatable); the rest take their defaults. |
-| `-answers <file>` | Pre-seed answers from a JSON or YAML file. |
-| `-tty` | Read answers from `/dev/tty` — for a git hook, whose stdin is already spoken for. |
-| `-paths` | Print every set of steps the wizard can ask, and the answers that reach it. Asks nothing. |
-| `-meta` | Add a `_meta` block recording what produced the answers. |
-| `-version`, `-h` | Version, usage. |
-
-Environment: `TINY_THEME` (preset name or path), `NO_COLOR`.
-
-Exit codes: `0` success · `1` execution or spec error · `2` usage error ·
-`3` `-require-tty` with no terminal · `4` cancelled by the user.
-
-**When nobody is there to answer** — CI, a hook, an agent's sandboxed shell —
-every step falls back to its default and `tiny` says so on stderr. Pass
-`-require-tty` to make that a hard failure instead: a payload of answers no
-human gave is worse than an error.
-
-## See it
+The shape of it:
 
 ```sh
-tiny demo                    # 20 steps, every type, colours and all
-tiny -theme minimal demo     # the same wizard, sober
-tiny -defaults demo | jq     # the same answers, headless
-./examples/tour.sh           # a guided tour of every feature, one screen at a time
-./examples/tour.sh paths     # or one section: hello argv themes fuzzy labels multi
-                             # validation demo headless paths meta streams inert
+answers="$(tiny $HEADLESS -format json "$spec")"   # $HEADLESS is "-defaults" in CI, empty otherwise
+
+name="$(jq -r '.name' <<<"$answers")"
+framework="$(jq -r '.framework' <<<"$answers")"
+tests="$(jq -r '.tests' <<<"$answers")"
+
+# ...act on the answers: write files, run git init, etc.
 ```
 
-The showcase is compiled into the binary, so it runs from any directory with
-nothing checked out.
+stdout carries only the JSON — the wizard itself draws on stderr — so the
+command substitution above captures clean answers while a human still sees
+the questions on screen. In CI, `-defaults` skips stdin entirely and
+resolves every step to its default.
 
-## The other half: showing
+<!-- MEDIA: terminal recording of scaffold.sh run interactively, then run again with --ci -->
 
-A harness does not only ask, it shows. Four commands draw rather than collect
-an answer — so there is no headless parity to keep, and nothing reaches stdout:
+## Coding agents
+
+Most agent shells have no TTY — `/dev/tty` can't even be opened inside
+Claude Code's Bash tool — so an agent can't prompt you mid-task, with `tiny`
+or anything else. What it can do is **author** the interaction: write the
+`wizard.yaml`, wire it into a Makefile target or a git hook, and verify it
+resolves cleanly with `-defaults` — all without a terminal. You run it
+later, for real, because the interaction is a file the agent can generate
+and check without ever performing it.
+
+**[AGENT-GUIDE.md](AGENT-GUIDE.md)** has the TTY check, a block to paste
+into `CLAUDE.md`/`AGENTS.md`, and the mistakes to avoid.
+
+## Showing, not just asking
+
+Four commands draw something instead of collecting an answer, so nothing
+from them reaches stdout:
 
 ```sh
 tiny spin "Building…" -- go build ./...   # spinner while a command runs
@@ -163,292 +133,17 @@ tiny box "Plan" < plan.md                 # a bordered box
 tiny bar 3 12 "files"                     # a progress line, redrawn in place
 ```
 
-| Command | Notes |
-| --- | --- |
-| `spin <msg> -- <cmd>` | Exits with the child's code; the child's stdout passes straight through, so `tiny spin … -- cmd \| jq` still works. Ctrl-C reaches the child. `--stream` trades the animation for live stderr. |
-| `say <text>` | `--style header\|note\|error\|hint\|option\|table-header\|plain`. Reads stdin when given no text. |
-| `box [title]` | Wraps to terminal **cells**, so CJK and combining marks keep the edges square. `--width N`. |
-| `bar <cur> <total> [label]` | Overwrites its own line, and ends with a newline exactly when it reaches the total. |
+Without a terminal, each one degrades to a single plain line with no escape
+sequences — useful in a CI log, where animated frames are why people turn
+spinners off. See them all in fifteen seconds: [`examples/show.sh`](examples/show.sh).
 
-Without a terminal every one of them degrades to one plain line with **no escape
-sequences at all** — a CI log full of spinner frames is why people disable
-spinners. See them in fifteen seconds with [`examples/show.sh`](examples/show.sh).
+<!-- MEDIA: terminal recording of spin, say, box, bar running in sequence -->
 
-## Step types (13)
+## Reference
 
-| Type | Answer | Description |
-| --- | --- | --- |
-| `select` | `string` | Pick one option from a numbered list. |
-| `multiselect` | `[]string` | Pick zero or more; `all` and `none` accepted. |
-| `confirm` | `bool` | Yes/no question. |
-| `input` | `string` | Free-form text. |
-| `password` | `string` | Text entry without echo on a TTY. |
-| `search` | `string` | Type to filter a long option list. |
-| `number` | `number` | Numeric value with `min`/`max`/`increment`. |
-| `date` | `string` | Date or date+time (`format: date`/`datetime`). |
-| `keyvalue` | `object` | `key=value` pairs, one per line. |
-| `editor` | `string` | Opens `$EDITOR` for multi-line text. |
-| `autocomplete` | `string` | Free text with prefix suggestions. |
-| `table` | row index | Shows a table; `selectable: true` returns the chosen row's index, or a cell with `return_column`. |
-| `file` | `string` | Pick a path; `dirs: true` picks a directory, `root:` says where to start. |
-
-Any step with `options` accepts `height: N` to cap how many are shown at once;
-the rest are summarised as `… N more above/below`, and the option numbers stay
-the same either way. `editor` collects multi-line text directly when no
-`$EDITOR` is available — finish with a line containing only `.`
-
-Full schema and per-type reference: **[SPEC.md](SPEC.md)**.
-
-## The whole wizard as arguments
-
-For a question that is not worth a file, write it as plain words:
-
-```sh
-tiny select framework SwiftUI UIKit AppKit
-tiny select framework SwiftUI UIKit + input name MyApp + confirm git yes
-tiny number port 8080 --min 1 --max 65535
-```
-
-The title is derived from the key (`db_host` becomes "Db host") and a
-single-choice step defaults to its first option, so a short wizard is
-headless-safe without saying so. Measured against gum, input plus output: 12
-tokens against 16 for one question, 32 against 46 for three, 74 against 111 for
-six — the shape is bare words rather than punctuation precisely because
-tokenizers charge for `,` `:` `=` and not for spaces.
-
-It is sugar: the same `Validate`, the same execution path, and a test requires
-each short form and the YAML it stands for to parse to identical wizards.
-`table` is the one type left out — its rows are two-dimensional, and YAML says
-that better.
-
-## Fuzzy filtering
-
-Any step with options accepts `match: fuzzy`, and ranks what it finds — a match
-at the start, on a word boundary or in an unbroken run scores higher, and a
-shorter option wins a tie:
-
-```console
-$ tiny search file --match fuzzy source/main.go third/src/main.go src scratch.txt
-> src
-    1) src
-    2) third/src/main.go
-    3) source/main.go
-```
-
-Matching an option costs ~24 ns and no allocation, so filtering 200 options on
-every keystroke costs microseconds.
-
-## Answering some questions in advance
-
-`-defaults` is all-or-nothing. To take the defaults *except* for a few answers:
-
-```sh
-tiny -set env=production -set version=v2.1.0 release.yaml
-tiny -answers answers.json release.yaml
-```
-
-A preset is the text you would have typed, and goes through the same validation
-a default does — an out-of-range preset is an error naming the key, never a
-value silently corrected.
-
-## Conditional steps
-
-A step runs only if its `when:` condition holds, so one spec can ask different
-questions depending on the answers:
-
-```yaml
-- type: select
-  key: db_engine
-  title: "Database engine"
-  options: [postgres, mysql, sqlite]
-  when: "use_db"
-```
-
-Six forms — `key`, `!key`, `==`, `!=`, `in a|b`, `contains` — evaluated against
-earlier answers only, so branching behaves identically headless. A skipped step
-contributes no key to the JSON: the consumer can tell "not asked" from "answered
-with nothing". See [`examples/branching.yaml`](examples/branching.yaml).
-
-### Reading a branching wizard without running it
-
-`-paths` prints every distinct set of steps the wizard can ask, one JSON object
-per line, each with the answers that reach it. It reads no input and asks
-nothing, so it is safe against a spec you were sent:
-
-```console
-$ tiny -paths examples/branching.yaml
-{"answers":{"kind":"cron-job"},"steps":["kind","schedule"]}
-{"answers":{"kind":"static-site","regions":""},"steps":["kind","build_dir","regions"]}
-{"answers":{"kind":"static-site","regions":"eu-west-1"},"steps":["kind","build_dir","regions","gdpr_ack"]}
-...
-
-$ tiny -paths deploy.yaml | wc -l      # how many shapes there are to review
-$ tiny -paths deploy.yaml > paths.jsonl && git diff paths.jsonl
-```
-
-Only the keys a condition actually reads are branched, each over a declared
-domain — a confirm both ways, a select over its options, a multiselect over
-nothing/one/all. It is a bounded exploration rather than a proof, and it says
-so on stderr when the list is cut. What it guarantees is the useful half:
-every path it prints is reachable by the answers printed beside it.
-
-## Composing a wizard out of files
-
-The questions an organisation asks the same way every time are written once and
-included, instead of being copied into every wizard and drifting apart:
-
-```yaml
-include:
-  - fragments/ownership.yaml
-steps:
-  - type: confirm
-    key: apply
-    title: "Deploy to ${env} as ${owner}?"
-```
-
-Included steps come first, so their answers are available to the conditions
-that follow. `include:` is the one feature that reads a second file, so it is
-confined: relative paths only, resolved against the including file and never
-outside its directory tree (symlinks resolved before the check), no cycles,
-bounded depth, and refused outright for a spec with no directory of its own —
-one piped in on stdin. A spec you were mailed can pull in what was already
-sitting next to it, and nothing else. See
-[`examples/composed.yaml`](examples/composed.yaml).
-
-## Labels and descriptions
-
-An option has two audiences: the person reading the terminal and the caller
-receiving the answer. They can be different words.
-
-```yaml
-- type: select
-  key: env
-  title: "Environment"
-  options:
-    - dev
-    - value: staging
-      label: Staging
-      description: production data shapes, no production traffic
-    - value: prod
-      label: Production
-      description: real users, real pager
-```
-
-The answer is always the **value** (`prod`), the label is what is drawn, and
-the description sits beside it in the note style. A label is typeable at the
-prompt, filterable under either name, and accepted by `-set` — a word on screen
-that cannot be typed back is a trap. A label colliding with another option's
-value is a load error.
-
-## Where a payload came from
-
-`-meta` adds a `_meta` block: the tiny that ran, the spec it came from and the
-sha256 of every byte read, whether a human answered or a job defaulted, whether
-there was a terminal at all, and which steps were never asked.
-
-```console
-$ tiny -defaults -meta -compact deploy.yaml | jq '._meta'
-{
-  "answered": "3",
-  "mode": "defaults",
-  "skipped": "change_review,ticket",
-  "source": "deploy.yaml",
-  "spec_sha256": "260e426e...",
-  "started": "2026-08-05T16:18:52Z",
-  "tiny": "v0.3.0",
-  "tty": "false"
-}
-```
-
-`_meta` cannot collide with a step: a wizard key must start with a letter or a
-digit. It is off by default, because a payload with a timestamp in it is not
-byte-reproducible.
-
-## Headless
-
-`-defaults` resolves every step to its `default` and never touches stdin:
-
-- `select`/`search`/`autocomplete`: the default must be one of the `options`.
-- `multiselect`: a list or comma-separated string; absent → empty list.
-- `confirm`: `yes`/`y`/`true` → `true`, `no`/`n`/`false` → `false`, absent → `false`.
-- `input`/`password`/`editor`: string default (empty allowed).
-- `number`: validated against `min`/`max`; absent → `0`.
-- `date`: validated against `format`.
-- `keyvalue`: mapping, otherwise an empty map.
-- `table`: with `selectable` and a default, the row index; otherwise `null`.
-
-A `required: true` step with no default is an error in headless mode — which
-makes `tiny -defaults w.yaml` a free validity check for a generated spec.
-
-## Theming
-
-Every wizard is drawn through a theme: symbols (prompt marker, header
-decoration, bullets, table rule) and styles (colors, attributes). Five presets
-ship in the binary — `default`, `minimal`, `sleek`, `ascii`, `plain` — and any
-of them can be overridden by a few lines of YAML.
-
-```yaml
-theme:
-  preset: sleek
-  symbols:
-    prompt: "→ "
-  styles:
-    header: "bold #bd93f9"
-```
-
-Sources layer in order — preset, the wizard's own `theme:` block, `$TINY_THEME`,
-`-theme` — so a wizard author can *suggest* a look and whoever runs it always
-has the last word. Colors follow [NO_COLOR](https://no-color.org) and switch
-off automatically when the output is not a terminal.
-
-Full reference and a copyable template: **[THEMING.md](THEMING.md)**.
-
-## For coding agents
-
-An agent's own shell usually has no terminal — inside Claude Code's Bash tool
-`/dev/tty` cannot even be opened — so an agent cannot prompt you mid-task, with
-`tiny` or with anything else. What it *can* do is **author** the interaction:
-write the spec, wire it into a Makefile target or a git hook, and verify it
-resolves with `-defaults`, all without a terminal. You run it later, for real.
-
-That works because the interaction is data: it can be generated and checked
-without being performed.
-
-**[AGENT-GUIDE.md](AGENT-GUIDE.md)** has the TTY check, a ready-made block to
-paste into your `CLAUDE.md` / `AGENTS.md`, and the mistakes to avoid.
-
-## Example
-
-[`examples/scaffold.sh`](examples/scaffold.sh) is a working consumer: it
-generates a spec, runs it, parses the JSON with `jq`, scaffolds a Swift project
-from the answers — and runs headless with `--ci`.
-
-```sh
-./examples/scaffold.sh          # interactive
-./examples/scaffold.sh --ci     # unattended
-```
-
-## What a spec cannot do
-
-A tiny spec is **inert**. It cannot run a command, reach the network, or read a
-file you did not point it at — there is no `exec:` and there will not be one.
-You can receive one by email, generate one from an untrusted issue, or
-`curl | tiny -` it, and the worst it can do is ask you a question.
-
-Three things enforce that, each of which was once a hole an adversarial review
-found and closed: the editor a step opens comes from `$VISUAL`/`$EDITOR` only,
-never from the spec; a `file` step's listing cannot walk above where it started,
-symlinks resolved before the check; and control characters are stripped from
-spec text, so an option cannot retitle your window or write your clipboard.
-
-That is a deliberate refusal, not a missing feature. The moment a spec can run
-something, every one of those becomes remote code execution, and a coding agent
-reading a poisoned issue becomes the delivery mechanism. To fill a list from
-live data, let the caller produce it — they already have the permissions:
-
-```sh
-tiny select branch $(git branch --format='%(refname:short)')
-```
+The full spec — every step type, `-format`/`-set`/`-answers`/`-paths`,
+conditional steps, `include:`, theming — is in **[SPEC.md](SPEC.md)**.
+`tiny -h` covers every flag. `THEMING.md` covers themes.
 
 ## Contributing
 
