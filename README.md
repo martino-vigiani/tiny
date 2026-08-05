@@ -172,17 +172,17 @@ Full reference and a copyable template: **[THEMING.md](THEMING.md)**.
 
 ## For coding agents
 
-An agent can't ask its user a structured question. With `tiny` it writes a YAML
-file, runs one command, and reads JSON — and the same interaction still works
-unattended in CI.
+An agent's own shell usually has no terminal — inside Claude Code's Bash tool
+`/dev/tty` cannot even be opened — so an agent cannot prompt you mid-task, with
+`tiny` or with anything else. What it *can* do is **author** the interaction:
+write the spec, wire it into a Makefile target or a git hook, and verify it
+resolves with `-defaults`, all without a terminal. You run it later, for real.
 
-```sh
-answers="$(tiny /tmp/ask.yaml)"    # prompts on stderr, pure JSON captured
-```
+That works because the interaction is data: it can be generated and checked
+without being performed.
 
-**[AGENT-GUIDE.md](AGENT-GUIDE.md)** has a ready-made block to paste into your
-`CLAUDE.md` / `AGENTS.md`, the verification workflow (`-defaults` as a dry run),
-and the mistakes to avoid.
+**[AGENT-GUIDE.md](AGENT-GUIDE.md)** has the TTY check, a ready-made block to
+paste into your `CLAUDE.md` / `AGENTS.md`, and the mistakes to avoid.
 
 ## Example
 

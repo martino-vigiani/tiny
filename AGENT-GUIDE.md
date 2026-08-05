@@ -1,16 +1,34 @@
 # Using tiny from a coding agent
 
-A coding agent — Claude Code, Codex, opencode, Cursor, an Agent SDK script —
-cannot ask its user a structured question. It can print text and hope, or it can
-guess. `tiny` closes that gap: the agent **writes a YAML file**, **runs one
-command**, and **gets JSON back**.
+## Read this first: an agent's shell usually has no terminal
 
-```
-agent writes wizard.yaml  →  tiny renders it  →  agent reads JSON from stdout
+Verify it before designing anything around prompting:
+
+```sh
+test -t 0 && echo "stdin is a TTY" || echo "no TTY"
+: < /dev/tty 2>/dev/null && echo "/dev/tty openable" || echo "no controlling terminal"
 ```
 
-The same file runs unattended in CI (`-defaults`), so an interaction an agent
-designs for a human also works in a pipeline with nobody watching.
+Inside Claude Code's Bash tool, both answer no: there is no controlling
+terminal at all. **An agent that shells out to `tiny` cannot prompt its user.**
+Every step falls back to its default, exactly as under `-defaults`. The same is
+true of most sandboxed tool runners and of any CI job.
+
+So the useful pattern is not "the agent asks the user mid-task". It is:
+
+> **The agent *authors* the interaction. A human runs it later, in a real
+> terminal — possibly many times.**
+
+An agent writes a `wizard.yaml` into a repo, wires it into a `Makefile` target,
+a git hook, a `postCreate` step, an npm script or a setup script, and verifies
+it resolves headless. The human gets a working interactive wizard; CI gets the
+same wizard with nobody watching. That works precisely because the spec is data
+rather than code — the agent can produce and check it without ever running it
+interactively.
+
+Where the agent *does* have a terminal (a CLI the user launched in their own
+shell, not a sandboxed tool call), prompting works normally. Check, don't
+assume.
 
 ## No temp file needed
 
@@ -62,11 +80,15 @@ all an agent needs to use `tiny` correctly without reading the full spec.
 ```markdown
 ## Asking the user a structured question
 
-When you need input from the user — a choice, a name, a confirmation, a set of
-options — do not print a question and guess the answer. Write a wizard spec and
-run `tiny`:
+When you need to capture a choice from the user — for a setup script, a
+Makefile target, a git hook, or any command they will run themselves — do not
+hardcode it or guess. Write a wizard spec and run it with `tiny`.
 
-1. Write the spec to a temp file, e.g. /tmp/ask.yaml:
+Note that if your own shell has no TTY (check with `test -t 0`), running the
+wizard will resolve every step to its default rather than prompting. Use that
+as your verification pass, and let the human run it for real.
+
+1. Write the spec where it belongs, e.g. scripts/setup.yaml:
 
    steps:
      - type: select          # select|multiselect|confirm|input|password|search|
@@ -130,6 +152,7 @@ with `--ci`. It is the shortest honest illustration of the whole contract.
 
 | Mistake | What happens | Fix |
 | --- | --- | --- |
+| Expecting a prompt in an agent's shell | No TTY there: every step takes its default | Author the wizard; let a human run it |
 | Parsing prompts from stdout | Nothing to parse — they are on stderr | Parse stdout as JSON |
 | No `default:` on a `required:` step | `-defaults` fails with exit 1 | Add a default, or drop `required` |
 | `select` default not among `options` | Spec rejected at load | Use one of the options verbatim |
