@@ -54,13 +54,15 @@ func run(args []string) int {
 	var sets repeatable
 	fs.Var(&sets, "set", "pre-seed one answer as key=value (repeatable); other steps take their defaults")
 	answersFile := fs.String("answers", "", "pre-seed answers from a JSON or YAML file of key: value")
+	showPaths := fs.Bool("paths", false, "print every set of steps the wizard can ask, and the answers that reach it")
 	withMeta := fs.Bool("meta", false, "add a _meta block recording what produced the answers")
 	showVersion := fs.Bool("version", false, "print version and exit")
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage:\n  tiny [flags] <wizard.yaml>\n"+
 			"  tiny [flags] -                        read the spec from stdin\n"+
 			"  tiny [flags] <type> <key> [value...]  write the wizard as arguments\n"+
-			"  tiny demo                             run the built-in showcase\n\n"+
+			"  tiny demo                             run the built-in showcase\n"+
+			"  tiny -paths <wizard.yaml>             list every path, ask nothing\n\n"+
 			"    e.g. tiny select framework SwiftUI UIKit + confirm git yes\n"+
 			"    types: %s\n\nFlags:\n", spec.ShortTypeNames())
 		fs.PrintDefaults()
@@ -151,6 +153,12 @@ func run(args []string) int {
 			fmt.Fprintf(os.Stderr, "tiny: invalid wizard: %v\n", err)
 			return 1
 		}
+	}
+
+	// -paths reads no input and asks nothing, so it runs before any terminal
+	// is touched: it is meant to be usable on a spec you were sent.
+	if *showPaths {
+		return printPaths(os.Stdout, wiz)
 	}
 
 	resolved, err := resolveTheme(wiz.Theme, *themeRef, *noColor)
