@@ -56,8 +56,12 @@ func (fileWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, error) {
 		// picker and the line-based path render it with no special handling.
 		listing := s
 		listing.Options = entries
-		listing.Default = nil
 		listing.Title = s.Prompt() + " — " + dir
+		// The suggested path is marked when the listing is showing the
+		// directory that holds it, so pressing enter accepts the suggestion —
+		// otherwise a step's default was reachable headless but invisible to
+		// the person the suggestion was for.
+		listing.Default = suggestionIn(dir, s, entries)
 
 		choice, err := chooseEntry(ctx, listing, env)
 		if err != nil {
@@ -103,6 +107,26 @@ func (fileWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, error) {
 			return chosen, nil
 		}
 	}
+}
+
+// suggestionIn returns the listing entry matching the step's default, when the
+// listing is showing the directory that default lives in.
+func suggestionIn(dir string, s spec.Step, entries []string) any {
+	def, ok := s.Default.(string)
+	if !ok || def == "" {
+		return nil
+	}
+	abs, err := filepath.Abs(def)
+	if err != nil || filepath.Dir(abs) != dir {
+		return nil
+	}
+	name := filepath.Base(abs)
+	for _, e := range entries {
+		if e == name || e == name+dirSuffix {
+			return e
+		}
+	}
+	return nil
 }
 
 // chooseEntry runs one directory listing through the ordinary select machinery.

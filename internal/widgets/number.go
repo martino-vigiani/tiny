@@ -42,13 +42,13 @@ func (numberWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, error)
 				if s.Required {
 					return nil, unexpectedEOF(s.Key)
 				}
-				return float64(0), nil
+				return absentNumber(s), nil
 			}
 			if s.Required {
 				PrintError(env, "This field is required.")
 				continue
 			}
-			return float64(0), nil
+			return absentNumber(s), nil
 		}
 		value, err := strconv.ParseFloat(strings.TrimSpace(line), 64)
 		if err != nil {
@@ -124,4 +124,17 @@ func rangeMessage(s spec.Step) string {
 	default:
 		return "Number out of range."
 	}
+}
+
+// absentNumber is what an unanswered number step returns: zero, unless the step
+// declares a range that excludes it, in which case the nearest bound — a step
+// saying `min: 5` must not answer 0.
+func absentNumber(s spec.Step) float64 {
+	if s.Min != nil && *s.Min > 0 {
+		return *s.Min
+	}
+	if s.Max != nil && *s.Max < 0 {
+		return *s.Max
+	}
+	return 0
 }

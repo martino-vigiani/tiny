@@ -62,6 +62,15 @@ func (selectWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, error)
 		if i := indexFold(s.Options, line); i >= 0 {
 			return s.Options[i], nil
 		}
+		// A step that declares how it filters should filter the same way here.
+		// Without this, `match: fuzzy` worked at the live prompt and was inert
+		// in a pipe — the same spec behaving differently by how it was drawn.
+		if s.Match != "" {
+			if matches := filterMatching(s.Options, line, matcherFor(s.Match, matchSubstring),
+				s.Match == spec.MatchFuzzy); len(matches) == 1 {
+				return matches[0], nil
+			}
+		}
 		PrintErrorf(env, "Invalid choice, pick a number between 1 and %d.", len(s.Options))
 	}
 }

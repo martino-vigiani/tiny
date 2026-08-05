@@ -98,6 +98,16 @@ func defaultForStep(s spec.Step) (any, error) {
 			if s.Required {
 				return nil, fmt.Errorf("required step has no default")
 			}
+			// Zero is the natural absent value, but a step that declares a
+			// range should never answer outside it: a consumer reading
+			// `min: 5` and receiving 0 has been told two different things.
+			// The nearest value the step itself permits is the bound.
+			if s.Min != nil && *s.Min > 0 {
+				return *s.Min, nil
+			}
+			if s.Max != nil && *s.Max < 0 {
+				return *s.Max, nil
+			}
 			return float64(0), nil
 		}
 		f, err := spec.ToFloat(s.Default)
