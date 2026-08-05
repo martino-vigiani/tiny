@@ -196,12 +196,14 @@ steps:
     default: ""
     when: "push_secrets"
 
-  # ── 17. file: pick a path, from a listing rooted in the repo ──
+  # ── 17. file: pick a path, from a listing rooted where you ran tiny ──
+  #
+  # `root: "."` rather than a path inside this repo, so the same spec works
+  # from any directory — `tiny demo` runs it from wherever you are.
   - type: file
     key: overlay
     title: "Config overlay to apply"
-    root: "examples"
-    default: "examples/quickstart.yaml"
+    root: "."
 
   # ── 18. input whose default is built from earlier answers ──
   #

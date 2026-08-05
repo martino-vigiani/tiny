@@ -1,0 +1,228 @@
+# showcase — one wizard exercising every capability tiny has.
+#
+#   tiny examples/showcase.yaml                        # the real thing
+#   tiny -theme themes/neon.yaml examples/showcase.yaml
+#   tiny -defaults examples/showcase.yaml              # headless, same answers
+#   ./examples/showcase.sh                             # a consumer of the JSON
+#
+# The story: shipping a service to a fleet. Every step type, conditional
+# branches, ${interpolation}, pattern validation, fuzzy search, windowed
+# lists, bounded multiselect, a table that answers with a column, and a
+# theme — all in one file that still resolves headless.
+
+theme:
+  preset: sleek
+  symbols:
+    header_prefix: "\n╭─ "
+    header_suffix: " ─╮\n"
+    prompt: "╰─❯ "
+    cursor: "▸▸ "
+    cursor_blank: "   "
+    checked: "◆ "
+    unchecked: "◇ "
+    caret: "\e[38;2;255;225;0m▊\e[0m"
+    note_prefix: "· "
+    error_prefix: "✗ "
+    table_rule: "─"
+    hint_open: "["
+    hint_close: "]"
+  styles:
+    header: "bold #ff2d95"
+    prompt: "bold #00e5ff"
+    option: "#d9d0ff"
+    index: "#6f5fa8"
+    marker: "bold #00ff9c"
+    hint: "#8a7fc0"
+    note: "#8a7fc0"
+    error: "bold #ff3355"
+    table_header: "bold underline #00e5ff"
+    cursor: "bold #ffe100"
+    selected: "bold #00ff9c"
+    filter: "bold #ffe100"
+
+steps:
+  # ── 1. input, with a rule the spec checks against its own default ──
+  - type: input
+    key: service
+    title: "Service name"
+    placeholder: "my-service"
+    default: "aurora-api"
+    pattern: "^[a-z][a-z0-9-]{2,23}$"
+    message: "Lowercase letters, digits and dashes; 3-24 characters."
+    required: true
+
+  # ── 2. select ──
+  - type: select
+    key: runtime
+    title: "Runtime for ${service}"
+    options: [Go, Rust, Node, Python, Deno, JVM]
+    default: Go
+
+  # ── 3. confirm behind a branch: only compiled runtimes get asked ──
+  - type: confirm
+    key: static_binary
+    title: "Link ${runtime} statically?"
+    default: "yes"
+    when: "runtime in Go|Rust"
+
+  # ── 4. search over a long list, fuzzy-matched and windowed ──
+  - type: search
+    key: region
+    title: "Home region"
+    match: fuzzy
+    height: 8
+    options:
+      - eu-west-1
+      - eu-west-2
+      - eu-central-1
+      - eu-north-1
+      - eu-south-2
+      - us-east-1
+      - us-east-2
+      - us-west-1
+      - us-west-2
+      - ca-central-1
+      - sa-east-1
+      - af-south-1
+      - me-central-1
+      - ap-south-1
+      - ap-east-1
+      - ap-northeast-1
+      - ap-northeast-3
+      - ap-southeast-1
+      - ap-southeast-2
+      - ap-southeast-4
+    default: eu-west-1
+
+  # ── 5. multiselect, bounded and windowed ──
+  - type: multiselect
+    key: components
+    title: "Components to ship"
+    options: [api, worker, scheduler, web, migrations, docs]
+    default: "api, worker"
+    min_select: 1
+    max_select: 4
+    height: 6
+
+  # ── 6. number, reachable only when a worker is in the set ──
+  - type: number
+    key: queue_workers
+    title: "Worker concurrency"
+    min: 1
+    max: 64
+    increment: 1
+    default: 8
+    when: "components contains worker"
+
+  # ── 7. table answering with a column value, not a row index ──
+  - type: table
+    key: plan
+    title: "Capacity plan"
+    headers: [Plan, vCPU, Memory, Price]
+    rows:
+      - [nano, "1", "512 MB", "$7/mo"]
+      - [standard, "2", "2 GB", "$24/mo"]
+      - [boost, "4", "8 GB", "$96/mo"]
+      - [fleet, "16", "64 GB", "$610/mo"]
+    selectable: true
+    return_column: 1
+    default: standard
+
+  # ── 8. number ──
+  - type: number
+    key: replicas
+    title: "Replicas of ${service}"
+    min: 1
+    max: 24
+    increment: 1
+    default: 3
+
+  # ── 9-11. the database branch: a chain that drops out together ──
+  - type: confirm
+    key: needs_db
+    title: "Does ${service} need a database?"
+    default: "yes"
+
+  - type: select
+    key: db_engine
+    title: "Database engine"
+    options: [postgres, mysql, sqlite, cockroach]
+    default: postgres
+    when: "needs_db"
+
+  - type: number
+    key: db_size_gb
+    title: "Volume for ${db_engine}, in GB"
+    min: 10
+    max: 500
+    increment: 10
+    default: 50
+    when: "db_engine != sqlite"
+
+  # ── 12. autocomplete that also accepts an answer of its own ──
+  - type: autocomplete
+    key: alerts_to
+    title: "Alert channel"
+    placeholder: "type a prefix, or a channel of your own"
+    options: ["#ops", "#deploys", "#oncall", "#platform", "#noise"]
+    default: "#deploys"
+    allow_custom: true
+
+  # ── 13. keyvalue ──
+  - type: keyvalue
+    key: env
+    title: "Environment for ${service}"
+    default:
+      LOG_LEVEL: info
+      REGION: eu-west-1
+      OTEL_ENABLED: "true"
+
+  # ── 14. date, in datetime form ──
+  - type: date
+    key: window
+    title: "Rollout window opens"
+    format: datetime
+    default: "2026-09-01 02:00:00"
+
+  # ── 15-16. the secrets branch ──
+  - type: confirm
+    key: push_secrets
+    title: "Push secrets to the ${region} vault?"
+    default: "no"
+
+  - type: password
+    key: vault_token
+    title: "Vault token"
+    default: ""
+    when: "push_secrets"
+
+  # ── 17. file: pick a path, from a listing rooted where you ran tiny ──
+  #
+  # `root: "."` rather than a path inside this repo, so the same spec works
+  # from any directory — `tiny demo` runs it from wherever you are.
+  - type: file
+    key: overlay
+    title: "Config overlay to apply"
+    root: "."
+
+  # ── 18. input whose default is built from earlier answers ──
+  #
+  # No `pattern:` here on purpose: a rule is checked against the step's own
+  # default when the spec loads, before any answer exists to interpolate, so
+  # `${service}` would have to match the pattern too.
+  - type: input
+    key: module
+    title: "Module path"
+    default: "github.com/fleet/${service}"
+
+  # ── 19. editor ──
+  - type: editor
+    key: notes
+    title: "Release notes"
+    default: "Ship ${service} to ${region}."
+
+  # ── 20. the last word ──
+  - type: confirm
+    key: apply
+    title: "Deploy ${service} to ${region} now?"
+    default: "no"

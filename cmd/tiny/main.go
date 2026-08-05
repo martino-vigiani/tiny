@@ -57,7 +57,8 @@ func run(args []string) int {
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage:\n  tiny [flags] <wizard.yaml>\n"+
 			"  tiny [flags] -                        read the spec from stdin\n"+
-			"  tiny [flags] <type> <key> [value...]  write the wizard as arguments\n\n"+
+			"  tiny [flags] <type> <key> [value...]  write the wizard as arguments\n"+
+			"  tiny demo                             run the built-in showcase\n\n"+
 			"    e.g. tiny select framework SwiftUI UIKit + confirm git yes\n"+
 			"    types: %s\n\nFlags:\n", spec.ShortTypeNames())
 		fs.PrintDefaults()
@@ -104,7 +105,13 @@ func run(args []string) int {
 	// included — arrives untouched in fs.Args().
 	var wiz *spec.Wizard
 	var err error
-	if spec.IsShortType(fs.Arg(0)) {
+	if fs.Arg(0) == demoArg && fs.NArg() == 1 {
+		wiz, err = loadDemo()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "tiny: the built-in demo is broken: %v\n", err)
+			return 1
+		}
+	} else if spec.IsShortType(fs.Arg(0)) {
 		wiz, err = spec.ParseShort(fs.Args())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "tiny: %v\n", err)
