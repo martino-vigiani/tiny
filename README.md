@@ -119,6 +119,8 @@ printf '2\nn\n' | tiny wizard.yaml    # piped, no TTY needed
 | `-require-tty` | Fail (exit 3) instead of silently taking every default when there is no terminal. |
 | `-compact` | Print the JSON payload on one line. |
 | `-plain` | Ask one line at a time instead of drawing a live prompt. |
+| `-set key=value` | Pre-seed one answer (repeatable); the rest take their defaults. |
+| `-answers <file>` | Pre-seed answers from a JSON or YAML file. |
 | `-version`, `-h` | Version, usage. |
 
 Environment: `TINY_THEME` (preset name or path), `NO_COLOR`.
@@ -131,7 +133,7 @@ every step falls back to its default and `tiny` says so on stderr. Pass
 `-require-tty` to make that a hard failure instead: a payload of answers no
 human gave is worse than an error.
 
-## Step types (12)
+## Step types (13)
 
 | Type | Answer | Description |
 | --- | --- | --- |
@@ -146,7 +148,8 @@ human gave is worse than an error.
 | `keyvalue` | `object` | `key=value` pairs, one per line. |
 | `editor` | `string` | Opens `$EDITOR` for multi-line text. |
 | `autocomplete` | `string` | Free text with prefix suggestions. |
-| `table` | row index | Shows a table; `selectable: true` returns the chosen row's index. |
+| `table` | row index | Shows a table; `selectable: true` returns the chosen row's index, or a cell with `return_column`. |
+| `file` | `string` | Pick a path; `dirs: true` picks a directory, `root:` says where to start. |
 
 Any step with `options` accepts `height: N` to cap how many are shown at once;
 the rest are summarised as `… N more above/below`, and the option numbers stay
@@ -176,6 +179,36 @@ It is sugar: the same `Validate`, the same execution path, and a test requires
 each short form and the YAML it stands for to parse to identical wizards.
 `table` is the one type left out — its rows are two-dimensional, and YAML says
 that better.
+
+## Fuzzy filtering
+
+Any step with options accepts `match: fuzzy`, and ranks what it finds — a match
+at the start, on a word boundary or in an unbroken run scores higher, and a
+shorter option wins a tie:
+
+```console
+$ tiny search file --match fuzzy source/main.go third/src/main.go src scratch.txt
+> src
+    1) src
+    2) third/src/main.go
+    3) source/main.go
+```
+
+Matching an option costs ~24 ns and no allocation, so filtering 200 options on
+every keystroke costs microseconds.
+
+## Answering some questions in advance
+
+`-defaults` is all-or-nothing. To take the defaults *except* for a few answers:
+
+```sh
+tiny -set env=production -set version=v2.1.0 release.yaml
+tiny -answers answers.json release.yaml
+```
+
+A preset is the text you would have typed, and goes through the same validation
+a default does — an out-of-range preset is an error naming the key, never a
+value silently corrected.
 
 ## Conditional steps
 

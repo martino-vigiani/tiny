@@ -100,6 +100,14 @@ steps:
 | `delimiter`   | string               | `""`    | —                                               | Parsed but **currently unused** (forward compatibility).              |
 | `when`        | string               | `""`    | all                                             | Condition on an earlier answer; the step runs only if it holds. See *Conditional steps*. |
 | `height`      | int                  | `0`     | `select`, `multiselect`, `search`, `autocomplete` | Show at most N options at once; the rest become a `… N more` marker. `0` shows all. |
+| `match`       | string               | varies  | `select`, `search`, `autocomplete`, `multiselect` | How a typed filter is compared: `substring`, `prefix` or `fuzzy`. |
+| `min_select`  | int                  | `0`     | `multiselect`                                   | Fewest options that may be chosen. `0` is unbounded.                  |
+| `max_select`  | int                  | `0`     | `multiselect`                                   | Most options that may be chosen. `0` is unbounded.                    |
+| `allow_custom`| bool                 | `false` | `search`, `autocomplete`                        | Accept typed text that is not one of the options.                     |
+| `return_column`| int                 | `0`     | `table`                                         | Answer with this column's value (1-based) instead of the row index.   |
+| `root`        | string               | `"."`   | `file`                                          | Directory the listing starts in.                                      |
+| `dirs`        | bool                 | `false` | `file`                                          | Choose a directory instead of descending into it.                     |
+| `hidden`      | bool                 | `false` | `file`                                          | Include dot-files in the listing.                                     |
 
 **Convention:** give every step a `title` (short, sentence case, in English). If a step has
 neither `title` nor `prompt`, the header is empty.
@@ -575,6 +583,59 @@ env_REGION=eu-west-1
 
 Prefer `-format json` piped through `jq` when values can be arbitrary; `env` is a
 convenience, JSON is the interchange format.
+
+---
+
+## Filtering and matching
+
+`select`, `search`, `autocomplete` and `multiselect` accept a typed filter. How
+it is compared is the step's to decide:
+
+| `match` | Meaning | Default for |
+|---------|---------|-------------|
+| `substring` | the option contains the text | `select`, `search`, `multiselect` |
+| `prefix` | the option starts with the text | `autocomplete` |
+| `fuzzy` | the text is a subsequence of the option | — |
+
+A fuzzy step also **ranks** its matches: a match at the start of an option, on a
+word boundary (after a space, `-`, `_`, `.`, `/`, or at a camelCase transition),
+or in an unbroken run scores higher, and a shorter option wins a tie. Ranking
+applies to the numbered list as well as to the live prompt, so "the second one"
+means the same thing either way.
+
+`allow_custom: true` makes a `search` or `autocomplete` accept text that matches
+nothing, for the steps whose options are suggestions rather than an enumeration.
+
+---
+
+## Pre-seeding answers
+
+`-defaults` answers every step from its `default`. To answer *some* steps and
+leave the rest to their defaults:
+
+```sh
+tiny -set env=production -set version=v2.1.0 release.yaml
+tiny -answers answers.json release.yaml
+tiny -answers answers.json -set env=staging release.yaml   # the flag wins
+```
+
+- A preset is **the text a person would have typed at that prompt** — so a
+  `multiselect` takes `iOS,macOS`, a `keyvalue` takes `A=1,B=2`, and a
+  `confirm` takes `yes`/`no`. One consequence: a value containing a comma
+  cannot be expressed this way; use a YAML spec default instead.
+- **A selectable table takes the row number shown on screen (1-based)**, because
+  a preset mirrors what you would type. A spec `default:` integer stays 0-based:
+  that is the author's index, not the reader's.
+- Every preset goes through the same coercion and validation a `default` does.
+  A preset that is invalid for its step is an error naming the key, never a
+  silently corrected value.
+- A preset for a step some branch skipped is a note on stderr, not an error: a
+  preset file is written once and reused, and a branching wizard legitimately
+  carries answers for branches a given run does not take.
+- A preset naming a step the wizard does not have is an error listing the valid
+  keys — no run could ever consume it, so it is a typo.
+
+`-answers` reads JSON or YAML; scalars, lists and mappings are all accepted.
 
 ---
 

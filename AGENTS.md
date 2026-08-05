@@ -107,7 +107,8 @@ drives the widget and suppresses raw mode, so no test ever touches a terminal.
   | keyvalue        | `map[string]string`  |
   | editor          | `string`             |
   | autocomplete    | `string`             |
-  | table           | `int` (selectable) or `nil` |
+  | table           | `int` (selectable), `string` (return_column) or `nil` |
+  | file            | `string`             |
 
 - **EOF policy (non-TTY):** on EOF with no pending data a widget applies the default; if
   the step is `required` and has no default it returns
@@ -184,6 +185,15 @@ picks it up automatically.
   `[]bool` mask, which both the list rendering and the answer are derived from
   (`spec.OptionsFor`). Resolving it separately for display and for the result is
   what made this widget the allocation outlier.
+- **A preset is validated exactly like a default.** `internal/runner/answers.go`
+  reuses the coercion helpers rather than parsing values itself, and delegates
+  to `defaultForStep` where it can, so a rule added to one path applies to the
+  other. Two places that can disagree about what an answer means is how a
+  wizard starts returning values nobody chose.
+- **Anything that changes what a chosen row or option *means* must be applied
+  in both `internal/widgets` and `internal/runner/headless.go`.** `return_column`
+  is the example: applied in only one, the same row would answer differently
+  depending on whether a human was present.
 - `-format env` output is shell-quoted and its keys are normalised
   (`internal/runner/runner.go`). Answers are arbitrary user text: never emit one into a
   `KEY=VALUE` line without `shellQuote`.

@@ -4,6 +4,20 @@
 
 ### Added
 
+- **Fuzzy matching** (`match: fuzzy|prefix|substring`), the reason people
+  install gum. Matches rank by where they land — start of the option, word
+  boundary, unbroken run — with the shorter option winning a tie, and the
+  ranking applies to the numbered list as well as the live prompt so the two
+  never disagree about order. ~24 ns per option, zero allocations.
+- **A `file` step**: pick a path, with `root:`, `dirs:` and `hidden:`.
+- **Answer pre-seeding**: `-set key=value` (repeatable) and `-answers <file>`.
+  `-defaults` was all-or-nothing; this answers some steps and leaves the rest to
+  their defaults. Presets go through the same coercion and validation as
+  defaults, so an invalid one is an error naming the key.
+- `min_select` / `max_select` on a multiselect, `allow_custom` on the steps
+  whose options are suggestions, `return_column` so a selectable table answers
+  with a cell instead of a row index.
+
 - **Live interactive prompts.** On a real terminal `select`, `multiselect`,
   `search` and `autocomplete` draw a redrawing frame: arrows move a cursor,
   typing filters, space toggles. Built directly on the terminal — no TUI
