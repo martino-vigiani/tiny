@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **`tiny demo`**: the 20-step showcase compiled into the binary, so it runs
+  from any directory with nothing checked out. A test keeps the embedded copy
+  identical to `examples/showcase.yaml`.
+- **Rich options**: an option may be `{value, label, description}`. The answer
+  is always the value; the label is what is drawn and is typeable, filterable
+  under either name, and accepted by `-set`. A label colliding with another
+  option's value is a load error.
+- **`include:`**: compose a wizard out of files. Included steps come first so
+  their answers reach the conditions that follow; themes layer; a fragment is
+  validated only once assembled. Confined to the tree the spec came from —
+  relative paths, symlinks resolved before the containment check, no cycles,
+  bounded depth, and refused for a spec with no directory of its own.
+- **`-paths`**: print every distinct set of steps a branching wizard can ask,
+  one JSON object per line, with the answers that reach it. Reads no input.
+  Bounded exploration, reported as cut when it is; every path printed is
+  reachable by the answers printed beside it.
+- **`-meta`**: a `_meta` block recording the version, the spec and the sha256 of
+  every byte read, the mode, whether there was a terminal, and which steps were
+  never asked. Off by default, since a timestamp breaks byte-reproducibility.
+
+### Fixed
+
+- A `number` step with `min: 5` and no default answered `0`, below its own
+  declared floor.
+- A `file` step's `default:` was returned headless but never shown at the
+  prompt it was a suggestion for.
+- `match:` was honoured at the live prompt and inert in a pipe on `select`.
+
 ## v0.3.0
 
 ### Added

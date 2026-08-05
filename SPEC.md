@@ -74,8 +74,8 @@ its JSON.
 
 ## Schema
 
-A wizard is a YAML document with one required top-level key, `steps`, and one optional
-key, `theme`:
+A wizard is a YAML document with one required top-level key, `steps`, and two optional
+ones, `theme` and `include`:
 
 ```yaml
 steps:
@@ -90,6 +90,8 @@ steps:
   contain at least one step.
 - Every step needs at least a `type`, a `key` and (in practice) a `title`.
 - `theme` is optional and affects presentation only; see *Theme* below.
+- `include` is an optional list of other spec files whose steps come first; see
+  *Composition* below.
 
 ### Step fields
 
@@ -101,7 +103,7 @@ steps:
 | `prompt`      | string               | `""`    | all                                             | Overrides `title` as the displayed header/prompt text.                |
 | `default`     | any                  | nil     | all (type-dependent)                            | See the per-type sections.                                            |
 | `required`    | bool                 | `false` | all                                             | True ⇒ the step must be answered (see EOF policy).                    |
-| `options`     | `[]string`           | nil     | `select`, `multiselect`, `search`, `autocomplete` | At least 1 option; no two options may differ only by case.          |
+| `options`     | `[]string` or `[]mapping` | nil | `select`, `multiselect`, `search`, `autocomplete` | At least 1 option; no two options may differ only by case. A mapping entry is `{value, label, description}` — see *Rich options*. |
 | `placeholder` | string               | `""`    | `input`, `autocomplete`                         | `input`: hint shown as `[placeholder]`; `autocomplete`: "Hint: ..." line. |
 | `min`         | number               | nil     | `number`                                        | Inclusive lower bound. Must be `<= max`.                              |
 | `max`         | number               | nil     | `number`                                        | Inclusive upper bound.                                                |
@@ -452,11 +454,78 @@ Display tabular data; optionally pick a row.
 
 ---
 
+## Rich options
+
+An option may be written as a mapping instead of a bare value:
+
+```yaml
+- type: select
+  key: env
+  title: "Environment"
+  default: staging
+  options:
+    - dev
+    - value: staging
+      label: Staging
+      description: production data shapes, no production traffic
+    - value: prod
+      label: Production
+      description: real users, real pager
+```
+
+| Field         | Required | Meaning                                                        |
+|---------------|----------|----------------------------------------------------------------|
+| `value`       | yes*     | What the wizard answers with. *Defaults to `label` if omitted.  |
+| `label`       | no       | What is drawn in the list and at the live prompt.               |
+| `description` | no       | An explanation drawn beside the option, in the note style.      |
+
+Rules:
+
+- The answer is **always the value**. A label can never change what a caller receives.
+- `default:` names a **value**, and is validated against the values.
+- A label is accepted wherever a value is: typed at the prompt, typed into the live
+  filter (which matches under both names), and passed to `-set`.
+- A label that collides with another option's value is a **load error**: one typed word
+  would otherwise mean two things. A label matching its own value is fine — `value:
+  staging` with `label: Staging` is one option, capitalised.
+- Both are interpolated like every other user-visible string.
+
+## Composition
+
+```yaml
+include:
+  - fragments/ownership.yaml
+  - fragments/database.yaml
+steps:
+  - type: confirm
+    key: apply
+    title: "Apply?"
+```
+
+- Included steps land **before** the including file's own, in the order listed, so their
+  answers are available to the `when:` conditions that follow.
+- A fragment is validated only once assembled, because its steps may condition on keys
+  the including file answers earlier.
+- Themes layer: a fragment's theme is the base, the including file wins, and `-theme`
+  still overrides both.
+- Keys are unique across the whole assembly; a duplicate is a load error.
+
+Confinement, because `include:` is the one feature that reads a second file:
+
+| Rule | Reason |
+|---|---|
+| Relative paths only, resolved against the including file | An absolute path is refused outright. |
+| Never outside the directory tree of the top-level spec | Symlinks are resolved *before* the check, so a link cannot smuggle a path out. |
+| No cycles; depth ≤ 8; ≤ 64 files | A wizard past that is one nobody can read. |
+| Refused for a spec with no directory (stdin, argv, embedded) | Resolving against the working directory would make the same bytes mean different things. |
+
 ## CLI
 
 ```
 tiny [flags] <wizard.yaml>
 tiny [flags] -                 # read the spec from stdin
+tiny demo                      # run the showcase compiled into the binary
+tiny -paths <wizard.yaml>      # list every path; ask nothing
 ```
 
 Passing `-` instead of a path reads the spec from stdin, so a caller composing a
@@ -491,6 +560,8 @@ step falls back to its default, exactly as under `-defaults`.
 | `-tty`        | Read answers from `/dev/tty`, leaving stdin to whatever owns it. |
 | `-set`        | Pre-seed one answer as `key=value`; repeatable.                 |
 | `-answers`    | Pre-seed answers from a JSON or YAML file.                      |
+| `-paths`      | Print every distinct set of steps the wizard can ask, one JSON object per line, with the answers that reach it. Reads no input. |
+| `-meta`       | Add a `_meta` block recording what produced the answers.        |
 | `-version`    | Print `tiny v0.3.0` and exit.                                  |
 | `-h`          | Print usage and exit.                                          |
 
@@ -539,6 +610,47 @@ tiny -version                           # tiny v0.3.0
 ```
 
 ---
+
+### -paths
+
+`-paths` enumerates the shapes a branching wizard can take, without running it and
+without reading input. One JSON object per line: `{"steps": [...], "answers": {...}}`,
+sorted so two runs of the same spec print the same list.
+
+Only keys some condition reads are branched, each over a declared domain:
+
+| Step type                            | Values tried                                     |
+|--------------------------------------|--------------------------------------------------|
+| `confirm`                            | true and false                                   |
+| `select`, `search`, `autocomplete`   | every option                                     |
+| `multiselect`                        | nothing, each option alone, all of them          |
+| `number`                             | its default, plus every numeric literal compared against it |
+| everything else                      | its default, plus every literal compared against it |
+
+It is a bounded exploration, not a proof: it cannot invent the one string that
+satisfies a `==` the spec never mentions. It **does** guarantee that every path
+printed is reachable by the answers printed beside it, and it reports on stderr when
+the list was cut at `DefaultPathLimit` (500).
+
+### -meta
+
+`-meta` adds a `_meta` key. It cannot collide with a step, because a wizard key must
+start with a letter or a digit. Every value is a string, so the block survives `json`,
+`yaml` and `env` alike.
+
+| Field         | Meaning                                                        |
+|---------------|----------------------------------------------------------------|
+| `tiny`        | The version that ran the wizard.                                |
+| `source`      | The spec: a path, `-`, `demo`, or `argv`.                       |
+| `spec_sha256` | sha256 of **every byte read**, includes and all.                |
+| `mode`        | `interactive`, `defaults` or `preset`.                          |
+| `tty`         | Whether a person could actually answer.                         |
+| `answered`    | How many steps produced an answer.                              |
+| `skipped`     | The keys never asked, comma-separated. Absent when none were.   |
+| `started`     | RFC 3339 UTC.                                                   |
+| `elapsed_ms`  | How long the wizard took.                                       |
+
+It is off by default: a payload carrying a timestamp is not byte-reproducible.
 
 ## Output formats
 

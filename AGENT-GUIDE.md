@@ -129,6 +129,38 @@ tiny -defaults /tmp/ask.yaml >/dev/null || echo "spec is broken"
 Exit code 1 with a message on stderr means the spec is wrong — the error names
 the offending step key, so it is enough to fix it and retry.
 
+If the wizard branches, `-paths` shows what it can ask before anyone answers:
+
+```sh
+tiny -paths /tmp/ask.yaml   # one JSON object per shape: steps, and what reaches them
+```
+
+It reads no input, so it is also how to inspect a spec you did not write. Use
+it to check that every branch you meant to exist is reachable, and that the
+keys your code reads afterwards are present on the paths it will actually take.
+
+## Explaining the choices
+
+An option can carry a label and a description without changing what the answer
+is — which matters most for an agent, since the value your code branches on and
+the words a human needs to choose are rarely the same:
+
+```yaml
+- type: select
+  key: strategy
+  title: "Rollout strategy"
+  options:
+    - value: rolling
+      label: Rolling
+      description: no downtime, two versions live at once
+    - value: recreate
+      label: Recreate
+      description: brief downtime, one version at a time
+```
+
+You still receive `"strategy": "rolling"`. Prefer this to encoding the
+explanation into the value, which forces your own code to parse prose.
+
 ## Matching the host tool's look
 
 An agent embedded in someone else's CLI should not make that CLI suddenly look

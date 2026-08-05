@@ -95,6 +95,7 @@ No runtime dependencies, no config file, nothing to install alongside it.
 ## Use it
 
 ```sh
+tiny demo                             # the built-in showcase, from anywhere
 tiny select framework SwiftUI UIKit   # the whole wizard as arguments
 tiny wizard.yaml                      # interactive; JSON on stdout
 tiny - <<'YAML'                       # spec from stdin, no temp file
@@ -122,6 +123,8 @@ printf '2\nn\n' | tiny wizard.yaml    # piped, no TTY needed
 | `-set key=value` | Pre-seed one answer (repeatable); the rest take their defaults. |
 | `-answers <file>` | Pre-seed answers from a JSON or YAML file. |
 | `-tty` | Read answers from `/dev/tty` — for a git hook, whose stdin is already spoken for. |
+| `-paths` | Print every set of steps the wizard can ask, and the answers that reach it. Asks nothing. |
+| `-meta` | Add a `_meta` block recording what produced the answers. |
 | `-version`, `-h` | Version, usage. |
 
 Environment: `TINY_THEME` (preset name or path), `NO_COLOR`.
@@ -133,6 +136,17 @@ Exit codes: `0` success · `1` execution or spec error · `2` usage error ·
 every step falls back to its default and `tiny` says so on stderr. Pass
 `-require-tty` to make that a hard failure instead: a payload of answers no
 human gave is worse than an error.
+
+## See it
+
+```sh
+tiny demo                    # 20 steps, every type, colours and all
+tiny -theme minimal demo     # the same wizard, sober
+tiny -defaults demo | jq     # the same answers, headless
+```
+
+The showcase is compiled into the binary, so it runs from any directory with
+nothing checked out.
 
 ## Step types (13)
 
@@ -228,6 +242,101 @@ Six forms — `key`, `!key`, `==`, `!=`, `in a|b`, `contains` — evaluated agai
 earlier answers only, so branching behaves identically headless. A skipped step
 contributes no key to the JSON: the consumer can tell "not asked" from "answered
 with nothing". See [`examples/branching.yaml`](examples/branching.yaml).
+
+### Reading a branching wizard without running it
+
+`-paths` prints every distinct set of steps the wizard can ask, one JSON object
+per line, each with the answers that reach it. It reads no input and asks
+nothing, so it is safe against a spec you were sent:
+
+```console
+$ tiny -paths examples/branching.yaml
+{"answers":{"kind":"cron-job"},"steps":["kind","schedule"]}
+{"answers":{"kind":"static-site","regions":""},"steps":["kind","build_dir","regions"]}
+{"answers":{"kind":"static-site","regions":"eu-west-1"},"steps":["kind","build_dir","regions","gdpr_ack"]}
+...
+
+$ tiny -paths deploy.yaml | wc -l      # how many shapes there are to review
+$ tiny -paths deploy.yaml > paths.jsonl && git diff paths.jsonl
+```
+
+Only the keys a condition actually reads are branched, each over a declared
+domain — a confirm both ways, a select over its options, a multiselect over
+nothing/one/all. It is a bounded exploration rather than a proof, and it says
+so on stderr when the list is cut. What it guarantees is the useful half:
+every path it prints is reachable by the answers printed beside it.
+
+## Composing a wizard out of files
+
+The questions an organisation asks the same way every time are written once and
+included, instead of being copied into every wizard and drifting apart:
+
+```yaml
+include:
+  - fragments/ownership.yaml
+steps:
+  - type: confirm
+    key: apply
+    title: "Deploy to ${env} as ${owner}?"
+```
+
+Included steps come first, so their answers are available to the conditions
+that follow. `include:` is the one feature that reads a second file, so it is
+confined: relative paths only, resolved against the including file and never
+outside its directory tree (symlinks resolved before the check), no cycles,
+bounded depth, and refused outright for a spec with no directory of its own —
+one piped in on stdin. A spec you were mailed can pull in what was already
+sitting next to it, and nothing else. See
+[`examples/composed.yaml`](examples/composed.yaml).
+
+## Labels and descriptions
+
+An option has two audiences: the person reading the terminal and the caller
+receiving the answer. They can be different words.
+
+```yaml
+- type: select
+  key: env
+  title: "Environment"
+  options:
+    - dev
+    - value: staging
+      label: Staging
+      description: production data shapes, no production traffic
+    - value: prod
+      label: Production
+      description: real users, real pager
+```
+
+The answer is always the **value** (`prod`), the label is what is drawn, and
+the description sits beside it in the note style. A label is typeable at the
+prompt, filterable under either name, and accepted by `-set` — a word on screen
+that cannot be typed back is a trap. A label colliding with another option's
+value is a load error.
+
+## Where a payload came from
+
+`-meta` adds a `_meta` block: the tiny that ran, the spec it came from and the
+sha256 of every byte read, whether a human answered or a job defaulted, whether
+there was a terminal at all, and which steps were never asked.
+
+```console
+$ tiny -defaults -meta -compact deploy.yaml | jq '._meta'
+{
+  "answered": "3",
+  "mode": "defaults",
+  "skipped": "change_review,ticket",
+  "source": "deploy.yaml",
+  "spec_sha256": "260e426e...",
+  "started": "2026-08-05T16:18:52Z",
+  "tiny": "v0.3.0",
+  "tty": "false"
+}
+```
+
+`_meta` cannot collide with a step: a wizard key must start with a letter or a
+digit. It is off by default, because a payload with a timestamp in it is not
+byte-reproducible.
 
 ## Headless
 
