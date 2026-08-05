@@ -2,8 +2,10 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -37,6 +39,70 @@ func captureStdout(t *testing.T, fn func()) string {
 	return buf.String()
 }
 
+// The child process the spin tests drive.
+//
+// It is this very test binary, re-invoked in a mode, rather than `/bin/sh -c`.
+// The shell form read naturally and did not exist on Windows, where the whole
+// suite failed with `exec: "/bin/sh": executable file not found in %PATH%` —
+// a real portability hole in the tests, not in spin. Re-invoking the test
+// binary is the standard Go answer: it is guaranteed to exist, it starts
+// faster than a shell, and the child's behaviour is written in Go instead of
+// in a dialect that differs per platform.
+const spinHelperEnv = "TINY_SPIN_HELPER"
+
+// spinChild returns the argv that runs this binary as a stand-in child in the
+// given mode. The environment variable is what tells the re-invoked binary to
+// act as a child rather than run the test normally; t.Setenv scopes it to the
+// calling test, so the helper is inert during the ordinary run.
+func spinChild(t *testing.T, mode string) []string {
+	t.Helper()
+	t.Setenv(spinHelperEnv, "1")
+	return []string{os.Args[0], "-test.run=TestSpinHelperProcess", "--", mode}
+}
+
+// TestSpinHelperProcess is not a test: it is the body of the child process,
+// and it does nothing at all unless spinChild invoked it.
+func TestSpinHelperProcess(t *testing.T) {
+	if os.Getenv(spinHelperEnv) != "1" || len(os.Args) == 0 {
+		return
+	}
+	mode := os.Args[len(os.Args)-1]
+	switch {
+	case strings.HasPrefix(mode, "exit:"):
+		code, err := strconv.Atoi(strings.TrimPrefix(mode, "exit:"))
+		if err != nil {
+			code = 99
+		}
+		os.Exit(code)
+	case strings.HasPrefix(mode, "sleep:"):
+		ms, err := strconv.Atoi(strings.TrimPrefix(mode, "sleep:"))
+		if err != nil {
+			ms = 20
+		}
+		time.Sleep(time.Duration(ms) * time.Millisecond)
+		os.Exit(0)
+	case mode == "out-and-err":
+		time.Sleep(20 * time.Millisecond)
+		fmt.Fprintln(os.Stdout, "out")
+		fmt.Fprintln(os.Stderr, "err")
+		os.Exit(0)
+	case mode == "out-only":
+		fmt.Fprintln(os.Stdout, "hello-payload")
+		os.Exit(0)
+	case mode == "err-live":
+		fmt.Fprintln(os.Stderr, "live")
+		os.Exit(0)
+	case mode == "big-err":
+		// Well past the capture limit, in one write, so the test stays fast.
+		fmt.Fprintln(os.Stderr, strings.Repeat("x", 100_000))
+		os.Exit(0)
+	default:
+		// Not a mode this helper knows: exit distinctly rather than silently
+		// passing, so a typo in a test shows up as a wrong exit code.
+		os.Exit(98)
+	}
+}
+
 func newSpinUI(tty bool) (*UI, *bytes.Buffer) {
 	return newSpinUIWidth(tty, 80)
 }
@@ -57,7 +123,7 @@ func newSpinUIWidth(tty bool, width int) (*UI, *bytes.Buffer) {
 
 func TestSpinExitCodeIsChildsSuccess(t *testing.T) {
 	ui, _ := newSpinUI(false)
-	code := runSpin([]string{"Running", "--", "/bin/sh", "-c", "exit 0"}, ui)
+	code := runSpin(append([]string{"Running", "--"}, spinChild(t, "exit:0")...), ui)
 	if code != 0 {
 		t.Errorf("exit code = %d, want 0", code)
 	}
@@ -65,7 +131,7 @@ func TestSpinExitCodeIsChildsSuccess(t *testing.T) {
 
 func TestSpinExitCodeIsChildsFailure(t *testing.T) {
 	ui, _ := newSpinUI(false)
-	code := runSpin([]string{"Running", "--", "/bin/sh", "-c", "exit 3"}, ui)
+	code := runSpin(append([]string{"Running", "--"}, spinChild(t, "exit:3")...), ui)
 	if code != 3 {
 		t.Errorf("exit code = %d, want 3 (the child's)", code)
 	}
@@ -75,7 +141,7 @@ func TestSpinExitCodeIsChildsFailureTTY(t *testing.T) {
 	restore := shrinkFrameInterval(t)
 	defer restore()
 	ui, _ := newSpinUI(true)
-	code := runSpin([]string{"Running", "--", "/bin/sh", "-c", "exit 7"}, ui)
+	code := runSpin(append([]string{"Running", "--"}, spinChild(t, "exit:7")...), ui)
 	if code != 7 {
 		t.Errorf("exit code = %d, want 7 (the child's)", code)
 	}
@@ -83,9 +149,10 @@ func TestSpinExitCodeIsChildsFailureTTY(t *testing.T) {
 
 func TestSpinStdoutPassesThroughUntouched(t *testing.T) {
 	ui, errBuf := newSpinUI(false)
+	child := spinChild(t, "out-only")
 	var code int
 	out := captureStdout(t, func() {
-		code = runSpin([]string{"Echoing", "--", "/bin/echo", "hello-payload"}, ui)
+		code = runSpin(append([]string{"Echoing", "--"}, child...), ui)
 	})
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0", code)
@@ -124,9 +191,10 @@ func TestSpinUsageErrors(t *testing.T) {
 
 func TestSpinNonTTYIsPlainAndAnsiFree(t *testing.T) {
 	ui, buf := newSpinUI(false)
+	child := spinChild(t, "exit:0")
 	var code int
 	out := captureStdout(t, func() {
-		code = runSpin([]string{"Building the thing", "--", "/bin/sh", "-c", "exit 0"}, ui)
+		code = runSpin(append([]string{"Building the thing", "--"}, child...), ui)
 	})
 	_ = out
 	if code != 0 {
@@ -161,7 +229,7 @@ func TestSpinTTYAnimatesAndLeavesNoResidue(t *testing.T) {
 	defer restore()
 	ui, buf := newSpinUI(true)
 
-	code := runSpin([]string{"Working", "--", "/bin/sh", "-c", "sleep 0.03"}, ui)
+	code := runSpin(append([]string{"Working", "--"}, spinChild(t, "sleep:30")...), ui)
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0", code)
 	}
@@ -188,10 +256,11 @@ func TestSpinChildStderrDoesNotFightTheAnimation(t *testing.T) {
 	defer restore()
 	ui, buf := newSpinUI(true)
 
+	child := spinChild(t, "out-and-err")
 	var out string
 	var code int
 	out = captureStdout(t, func() {
-		code = runSpin([]string{"Working", "--", "/bin/sh", "-c", "sleep 0.02; echo out; echo err 1>&2"}, ui)
+		code = runSpin(append([]string{"Working", "--"}, child...), ui)
 	})
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0", code)
@@ -228,7 +297,7 @@ func TestSpinCommandNotFound(t *testing.T) {
 // Sanity check that exec.ExitError is what we expect from a signaled or
 // abnormally-exited process, so exitCodeFrom's assumptions hold.
 func TestExitCodeFromExitError(t *testing.T) {
-	cmd := exec.Command("/bin/sh", "-c", "exit 5")
+	cmd := exec.Command(spinChild(t, "exit:5")[0], spinChild(t, "exit:5")[1:]...)
 	err := cmd.Run()
 	exitErr, ok := err.(*exec.ExitError)
 	if !ok {
@@ -247,7 +316,7 @@ func TestExitCodeFromExitError(t *testing.T) {
 func TestSpinMessageIsSanitizedNonTTY(t *testing.T) {
 	ui, buf := newSpinUI(false)
 	evil := "Building\x1b]52;c;ZXZpbA==\x07 now"
-	code := runSpin([]string{evil, "--", "/bin/sh", "-c", "exit 0"}, ui)
+	code := runSpin(append([]string{evil, "--"}, spinChild(t, "exit:0")...), ui)
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0", code)
 	}
@@ -264,7 +333,7 @@ func TestSpinMessageIsSanitizedTTY(t *testing.T) {
 	defer restore()
 	ui, buf := newSpinUI(true)
 	evil := "Building\x1b]52;c;ZXZpbA==\x07 now"
-	code := runSpin([]string{evil, "--", "/bin/sh", "-c", "exit 0"}, ui)
+	code := runSpin(append([]string{evil, "--"}, spinChild(t, "exit:0")...), ui)
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0", code)
 	}
@@ -287,7 +356,7 @@ func TestSpinLongMessageIsClippedToWidth(t *testing.T) {
 	ui, buf := newSpinUIWidth(true, 20)
 
 	long := "this message is much longer than the twenty column terminal it is drawn on"
-	code := runSpin([]string{long, "--", "/bin/sh", "-c", "sleep 0.02"}, ui)
+	code := runSpin(append([]string{long, "--"}, spinChild(t, "sleep:20")...), ui)
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0", code)
 	}
@@ -318,7 +387,7 @@ func TestSpinCJKMessageIsClippedByCellsNotRunes(t *testing.T) {
 	ui, buf := newSpinUIWidth(true, 20)
 
 	cjk := "これは二十桁の端末には長すぎるメッセージです"
-	code := runSpin([]string{cjk, "--", "/bin/sh", "-c", "sleep 0.02"}, ui)
+	code := runSpin(append([]string{cjk, "--"}, spinChild(t, "sleep:20")...), ui)
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0", code)
 	}
@@ -340,7 +409,7 @@ func TestSpinCJKMessageIsClippedByCellsNotRunes(t *testing.T) {
 // the child exits.
 func TestSpinStreamFlagDisablesAnimationAndStreamsStderr(t *testing.T) {
 	ui, buf := newSpinUI(true) // TTY, but --stream should still go plain
-	code := runSpin([]string{"--stream", "Deploying", "--", "/bin/sh", "-c", "echo live 1>&2"}, ui)
+	code := runSpin(append([]string{"--stream", "Deploying", "--"}, spinChild(t, "err-live")...), ui)
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0", code)
 	}
@@ -360,10 +429,7 @@ func TestSpinTruncatesOversizedCapturedStderr(t *testing.T) {
 	defer restore()
 	ui, buf := newSpinUI(true)
 
-	// Print well over the cap in one call so the test stays fast: `yes` piped
-	// through head is not portable enough, so use awk to emit ~100KB.
-	script := "awk 'BEGIN{s=sprintf(\"%0100000d\",0); print s > \"/dev/stderr\"}'"
-	code := runSpin([]string{"Working", "--", "/bin/sh", "-c", script}, ui)
+	code := runSpin(append([]string{"Working", "--"}, spinChild(t, "big-err")...), ui)
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0", code)
 	}
