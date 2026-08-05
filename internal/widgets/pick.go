@@ -26,7 +26,13 @@ type matchFunc func(option, filter string) bool
 // picker is the live state of an interactive list.
 type picker struct {
 	options []string
-	filter  string
+	// labels and descs are index-aligned with options and usually nil: they
+	// carry the display text and the explanation of an option that declared
+	// them. The picker still answers with an index into options, so a label
+	// can never change what the wizard returns.
+	labels []string
+	descs  []string
+	filter string
 	// shown holds the indices of options passing the filter, in order. It is
 	// reused across keystrokes so filtering allocates nothing after the first.
 	shown  []int
@@ -190,8 +196,8 @@ func (p *picker) refilter() {
 		was = p.shown[p.cursor]
 	}
 	p.shown = p.shown[:0]
-	for i, opt := range p.options {
-		if p.filter == "" || p.match(opt, p.filter) {
+	for i := range p.options {
+		if p.filter == "" || p.matches(i) {
 			p.shown = append(p.shown, i)
 		}
 	}
@@ -215,13 +221,33 @@ func (p *picker) refilter() {
 	}
 }
 
+// display is the text drawn for option i: its label when it has one.
+func (p *picker) display(i int) string {
+	if i < len(p.labels) && p.labels[i] != "" {
+		return p.labels[i]
+	}
+	return p.options[i]
+}
+
+// matches decides whether option i survives the filter. A labelled option is
+// tried under both names: the person may be typing the word they read, or the
+// value they already know the wizard answers with, and refusing one of the two
+// would look like the filter is broken.
+func (p *picker) matches(i int) bool {
+	text := p.display(i)
+	if p.match(text, p.filter) {
+		return true
+	}
+	return text != p.options[i] && p.match(p.options[i], p.filter)
+}
+
 // sortByScore orders the visible options best-match first. It sorts the
 // existing []int in place with slices.SortFunc, so ranking costs no allocation
 // on a path that runs once per keystroke.
 func (p *picker) sortByScore() {
 	slices.SortStableFunc(p.shown, func(a, b int) int {
-		sa, _ := fuzzyScore(p.options[a], p.filter)
-		sb, _ := fuzzyScore(p.options[b], p.filter)
+		sa, _ := fuzzyScore(p.display(a), p.filter)
+		sb, _ := fuzzyScore(p.display(b), p.filter)
 		return sb - sa
 	})
 }
@@ -359,7 +385,8 @@ func (p *picker) draw(env *Env) {
 		env.endLine()
 	}
 	for i := from; i < to; i++ {
-		opt := p.options[p.shown[i]]
+		idx := p.shown[i]
+		opt := p.display(idx)
 		active := i == p.cursor
 		used := 0
 		if active {
@@ -372,7 +399,7 @@ func (p *picker) draw(env *Env) {
 		}
 		if p.multi {
 			env.buf = append(env.buf, t.SelectedOpen...)
-			if p.marks[p.shown[i]] {
+			if p.marks[idx] {
 				env.buf = append(env.buf, t.Checked...)
 				used += len(t.Checked)
 			} else {
@@ -386,11 +413,20 @@ func (p *picker) draw(env *Env) {
 		if !active {
 			env.buf = append(env.buf, t.OptionOpen...)
 		}
-		env.appendClipped(opt, used)
+		written := env.appendClipped(opt, used)
 		if active {
 			env.buf = append(env.buf, t.CursorClose...)
 		} else {
 			env.buf = append(env.buf, t.OptionClose...)
+		}
+		// The description follows the option on the same row, in the note
+		// style: a row per explanation would halve how many choices fit on
+		// screen, which is the opposite of what an explanation is for.
+		if idx < len(p.descs) && p.descs[idx] != "" {
+			env.buf = append(env.buf, "  "...)
+			env.buf = append(env.buf, t.NoteOpen...)
+			env.appendClipped(p.descs[idx], used+written+2)
+			env.buf = append(env.buf, t.NoteClose...)
 		}
 		env.endLine()
 	}
@@ -447,6 +483,8 @@ func newPicker(s spec.Step, marks []bool, multi bool, match matchFunc, hint stri
 		rank:    s.Match == spec.MatchFuzzy,
 		custom:  s.AllowCustom,
 		options: s.Options,
+		labels:  s.Labels,
+		descs:   s.Descriptions,
 		shown:   make([]int, 0, len(s.Options)),
 		marks:   marks,
 		multi:   multi,

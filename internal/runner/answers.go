@@ -250,9 +250,10 @@ func quoteList(keys []string) string {
 func presetForStep(s spec.Step, raw string) (any, error) {
 	switch s.Type {
 	case spec.TypeSelect, spec.TypeSearch, spec.TypeAutocomplete:
-		canon, ok := spec.CanonicalOption(raw, s.Options)
-		if ok {
-			return canon, nil
+		// By value or by label, because the same word is accepted at the
+		// prompt: what a person could type, a caller can pre-seed.
+		if i := s.IndexOfOption(raw); i >= 0 {
+			return s.Options[i], nil
 		}
 		// allow_custom means the typed text is itself a valid answer, so a
 		// preset may carry text that is not an option — but only then.
@@ -266,10 +267,14 @@ func presetForStep(s spec.Step, raw string) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		for _, item := range items {
-			if _, ok := spec.CanonicalOption(item, s.Options); !ok {
+		for i, item := range items {
+			j := s.IndexOfOption(item)
+			if j < 0 {
 				return nil, fmt.Errorf("%q is not one of the options (%s)", item, strings.Join(s.Options, ", "))
 			}
+			// Resolved to the value here, so a label never reaches the default
+			// path — which knows values only.
+			items[i] = s.Options[j]
 		}
 		// Once every item is known to be an option, the default path resolves
 		// the selection: ordering, canonical casing and any bound the step puts

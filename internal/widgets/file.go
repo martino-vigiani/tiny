@@ -55,7 +55,7 @@ func (fileWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, error) {
 		// The step is rewritten as an ordinary option list, so both the live
 		// picker and the line-based path render it with no special handling.
 		listing := s
-		listing.Options = entries
+		listing.ReplaceOptions(entries)
 		listing.Title = s.Prompt() + " — " + dir
 		// The suggested path is marked when the listing is showing the
 		// directory that holds it, so pressing enter accepts the suggestion —

@@ -39,6 +39,11 @@ func (s Step) Interpolate(answers map[string]any) Step {
 		s.Default = expand(def, answers)
 	}
 	s.Options = expandAll(s.Options, answers)
+	// Labels and descriptions are read by the same person as the title, so a
+	// wizard that interpolates one and not the other would be showing an
+	// earlier answer in half its text.
+	s.Labels = expandAll(s.Labels, answers)
+	s.Descriptions = expandAll(s.Descriptions, answers)
 	return s
 }
 

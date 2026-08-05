@@ -39,7 +39,7 @@ func (multiselectWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, e
 		}
 		return richMultiselect(ctx, s, env, marks)
 	}
-	PrintListMarkedHeight(env, s.Options, marks, s.Height)
+	PrintStepListMarked(env, s, marks, s.Height)
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -77,7 +77,7 @@ func (multiselectWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, e
 				selected[n-1] = true
 				continue
 			}
-			if i := indexFold(s.Options, t); i >= 0 {
+			if i := s.IndexOfOption(t); i >= 0 {
 				selected[i] = true
 				continue
 			}

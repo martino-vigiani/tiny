@@ -31,7 +31,7 @@ func (selectWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, error)
 			}
 		}
 	}
-	PrintListHeight(env, s.Options, defIdx, s.Height)
+	PrintStepList(env, s, defIdx, s.Height)
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -59,7 +59,9 @@ func (selectWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, error)
 		if n, err := strconv.Atoi(line); err == nil && n >= 1 && n <= len(s.Options) {
 			return s.Options[n-1], nil
 		}
-		if i := indexFold(s.Options, line); i >= 0 {
+		// By value or by label: a person answers with the word they read, and
+		// the caller still receives the value the spec declared.
+		if i := s.IndexOfOption(line); i >= 0 {
 			return s.Options[i], nil
 		}
 		// A step that declares how it filters should filter the same way here.

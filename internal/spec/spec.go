@@ -49,23 +49,31 @@ type Wizard struct {
 // (string for select/input/password/editor/date, scalar for confirm/number,
 // list or comma-separated string for multiselect, map for keyvalue).
 type Step struct {
-	Type        StepType   `yaml:"type"`
-	Key         string     `yaml:"key"`
-	Title       string     `yaml:"title"`
-	PromptText  string     `yaml:"prompt,omitempty"`
-	Options     []string   `yaml:"options,omitempty"`
-	Default     any        `yaml:"default,omitempty"`
-	Required    bool       `yaml:"required,omitempty"`
-	Placeholder string     `yaml:"placeholder,omitempty"`
-	Min         *float64   `yaml:"min,omitempty"`
-	Max         *float64   `yaml:"max,omitempty"`
-	Increment   float64    `yaml:"increment,omitempty"`
-	Headers     []string   `yaml:"headers,omitempty"`
-	Rows        [][]string `yaml:"rows,omitempty"`
-	Selectable  bool       `yaml:"selectable,omitempty"`
-	EditorCmd   string     `yaml:"editor,omitempty"`
-	Format      string     `yaml:"format,omitempty"`
-	Delimiter   string     `yaml:"delimiter,omitempty"`
+	Type       StepType `yaml:"type"`
+	Key        string   `yaml:"key"`
+	Title      string   `yaml:"title"`
+	PromptText string   `yaml:"prompt,omitempty"`
+	// Options is always the list of answer values. It is decoded by
+	// Step.UnmarshalYAML rather than by the tag, because an entry may be
+	// either a bare value or a mapping carrying a label and a description.
+	Options []string `yaml:"-"`
+	// Labels and Descriptions are index-aligned with Options and filled by
+	// Step.UnmarshalYAML from the mapping form of an option. Both are nil for
+	// a plain list of values, which is the case that must stay free.
+	Labels       []string   `yaml:"-"`
+	Descriptions []string   `yaml:"-"`
+	Default      any        `yaml:"default,omitempty"`
+	Required     bool       `yaml:"required,omitempty"`
+	Placeholder  string     `yaml:"placeholder,omitempty"`
+	Min          *float64   `yaml:"min,omitempty"`
+	Max          *float64   `yaml:"max,omitempty"`
+	Increment    float64    `yaml:"increment,omitempty"`
+	Headers      []string   `yaml:"headers,omitempty"`
+	Rows         [][]string `yaml:"rows,omitempty"`
+	Selectable   bool       `yaml:"selectable,omitempty"`
+	EditorCmd    string     `yaml:"editor,omitempty"`
+	Format       string     `yaml:"format,omitempty"`
+	Delimiter    string     `yaml:"delimiter,omitempty"`
 
 	// When is an optional condition on an earlier answer; the step runs only
 	// if it holds. See condition.go for the expression language.
@@ -385,13 +393,28 @@ func (s Step) Prompt() string {
 	return s.Title
 }
 
-// validateNoDuplicateOptions rejects options that differ only by case.
+// validateNoDuplicateOptions rejects options that differ only by case, and
+// labels that collide with anything else in the list.
+//
+// A label is typeable — a person answers with the word they read — so a label
+// equal to another option's value would make one typed answer mean two things,
+// and which one won would depend on the order the lookup happened to scan in.
 func validateNoDuplicateOptions(s Step) error {
 	seen := make(map[string]bool, len(s.Options))
 	for _, opt := range s.Options {
 		lo := strings.ToLower(opt)
 		if seen[lo] {
 			return fmt.Errorf("step %q: duplicate option %q (case-insensitive)", s.Key, opt)
+		}
+		seen[lo] = true
+	}
+	for _, label := range s.Labels {
+		if label == "" {
+			continue
+		}
+		lo := strings.ToLower(label)
+		if seen[lo] {
+			return fmt.Errorf("step %q: label %q collides with another option (case-insensitive)", s.Key, label)
 		}
 		seen[lo] = true
 	}

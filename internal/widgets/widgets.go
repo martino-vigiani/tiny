@@ -303,7 +303,39 @@ func PrintList(env *Env, items []string, defaultIdx int) {
 // types still means the same thing whether or not the list was truncated.
 func PrintListHeight(env *Env, items []string, defaultIdx, height int) {
 	from, to := window(len(items), defaultIdx, height)
-	printList(env, items, from, to, func(i int) bool { return i == defaultIdx })
+	printList(env, items, nil, from, to, func(i int) bool { return i == defaultIdx })
+}
+
+// PrintStepList renders a step's options the way the step describes them:
+// labels where it has them, and each description beside the option it explains.
+// It is what select and the file listing use, so the numbered list and the live
+// prompt show the same words.
+func PrintStepList(env *Env, s spec.Step, defaultIdx, height int) {
+	items := s.OptionLabels()
+	if items == nil {
+		items = s.Options
+	}
+	from, to := window(len(items), defaultIdx, height)
+	printList(env, items, s.Descriptions, from, to, func(i int) bool { return i == defaultIdx })
+}
+
+// PrintStepListMarked is PrintStepList for a multiselect, marking every option
+// whose entry in marked is true.
+func PrintStepListMarked(env *Env, s spec.Step, marked []bool, height int) {
+	items := s.OptionLabels()
+	if items == nil {
+		items = s.Options
+	}
+	first := -1
+	for i, m := range marked {
+		if m {
+			first = i
+			break
+		}
+	}
+	from, to := window(len(items), first, height)
+	printList(env, items, s.Descriptions, from, to,
+		func(i int) bool { return i < len(marked) && marked[i] })
 }
 
 // PrintListMarked renders a numbered option list where every item whose entry
@@ -324,7 +356,7 @@ func PrintListMarkedHeight(env *Env, items []string, marked []bool, height int) 
 		}
 	}
 	from, to := window(len(items), first, height)
-	printList(env, items, from, to, func(i int) bool { return i < len(marked) && marked[i] })
+	printList(env, items, nil, from, to, func(i int) bool { return i < len(marked) && marked[i] })
 }
 
 // window returns the slice of a list to draw: everything when height is zero or
@@ -347,7 +379,10 @@ func window(count, focus, height int) (from, to int) {
 	return from, from + height
 }
 
-func printList(env *Env, items []string, from, to int, isMarked func(int) bool) {
+// printList draws the numbered list. notes is index-aligned with items and may
+// be nil or shorter; a note is drawn beside the option it explains, in the
+// theme's note style, so the explanation cannot be mistaken for a choice.
+func printList(env *Env, items, notes []string, from, to int, isMarked func(int) bool) {
 	t := env.look()
 	if from > 0 {
 		appendOmitted(env, t, from, "above")
@@ -375,6 +410,12 @@ func printList(env *Env, items []string, from, to int, isMarked func(int) bool) 
 		env.buf = append(env.buf, t.OptionOpen...)
 		env.appendText(item)
 		env.buf = append(env.buf, t.OptionClose...)
+		if i < len(notes) && notes[i] != "" {
+			env.buf = append(env.buf, "  "...)
+			env.buf = append(env.buf, t.NoteOpen...)
+			env.appendText(notes[i])
+			env.buf = append(env.buf, t.NoteClose...)
+		}
 		env.buf = append(env.buf, '\n')
 	}
 	if to < len(items) {
