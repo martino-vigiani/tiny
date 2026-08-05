@@ -103,6 +103,17 @@ func run(args []string) int {
 		return 2
 	}
 
+	// The display commands come first: they draw rather than ask, take their
+	// own flags, and never reach the wizard machinery at all.
+	if cmd, ok := displayCommands[fs.Arg(0)]; ok {
+		ui, uiErr := newUI(*themeRef, *noColor)
+		if uiErr != nil {
+			fmt.Fprintf(os.Stderr, "tiny: %v\n", uiErr)
+			return 1
+		}
+		return cmd(fs.Args()[1:], ui)
+	}
+
 	// A first argument naming a step type means the wizard was written as argv
 	// words; anything else is a path, or "-" for stdin. flag.Parse stops at the
 	// first non-flag argument, so the whole short form — its own --attributes
