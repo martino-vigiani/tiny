@@ -13,6 +13,11 @@ import (
 func (r *Runner) RunDefaults(wiz *spec.Wizard) (map[string]any, error) {
 	answers := make(map[string]any, len(wiz.Steps))
 	for _, s := range wiz.Steps {
+		// Conditions read only earlier answers, so they resolve the same way
+		// here as in an interactive run: the two paths skip the same steps.
+		if !s.Condition().Eval(answers) {
+			continue
+		}
 		value, err := defaultForStep(s)
 		if err != nil {
 			return nil, fmt.Errorf("step %q: %w", s.Key, err)

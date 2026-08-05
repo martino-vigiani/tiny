@@ -113,6 +113,24 @@ Exit codes: `0` success · `1` execution or spec error · `2` usage error.
 
 Full schema and per-type reference: **[SPEC.md](SPEC.md)**.
 
+## Conditional steps
+
+A step runs only if its `when:` condition holds, so one spec can ask different
+questions depending on the answers:
+
+```yaml
+- type: select
+  key: db_engine
+  title: "Database engine"
+  options: [postgres, mysql, sqlite]
+  when: "use_db"
+```
+
+Six forms — `key`, `!key`, `==`, `!=`, `in a|b`, `contains` — evaluated against
+earlier answers only, so branching behaves identically headless. A skipped step
+contributes no key to the JSON: the consumer can tell "not asked" from "answered
+with nothing". See [`examples/branching.yaml`](examples/branching.yaml).
+
 ## Headless
 
 `-defaults` resolves every step to its `default` and never touches stdin:

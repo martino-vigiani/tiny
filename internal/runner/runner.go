@@ -49,9 +49,15 @@ func (r *Runner) SetTheme(t *theme.Resolved) {
 // Run executes every step of the wizard in order and returns the answers map.
 // Each step is dispatched to its registered widget; errors are wrapped with
 // the step key.
+// A step whose `when:` condition does not hold is skipped, and a skipped step
+// contributes no key to the answers — the caller sees the question was never
+// asked rather than a value nobody chose.
 func (r *Runner) Run(ctx context.Context, wiz *spec.Wizard) (map[string]any, error) {
 	answers := make(map[string]any, len(wiz.Steps))
 	for _, step := range wiz.Steps {
+		if !step.Condition().Eval(answers) {
+			continue
+		}
 		value, err := widgets.RunStep(ctx, step, r.env)
 		if err != nil {
 			return nil, fmt.Errorf("step %q: %w", step.Key, err)

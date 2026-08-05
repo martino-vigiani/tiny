@@ -60,6 +60,67 @@ func TestDefaultsInteractiveParity(t *testing.T) {
 	}
 }
 
+// Conditional steps must not open a hole in the central invariant: a `when:`
+// reads only earlier answers, so the headless and interactive paths have to
+// skip exactly the same steps and return exactly the same map.
+func TestConditionalParity(t *testing.T) {
+	widgets.RestoreTestRegistry()
+
+	wiz, err := spec.Parse([]byte(`
+steps:
+  - type: confirm
+    key: use_db
+    title: "Use a database?"
+    default: "yes"
+  - type: input
+    key: db_name
+    title: "Database name"
+    default: "app"
+    when: "use_db"
+  - type: confirm
+    key: cache
+    title: "Enable cache?"
+    default: "no"
+  - type: number
+    key: cache_size
+    title: "Cache size"
+    default: 64
+    when: "cache"
+  - type: input
+    key: cache_dir
+    title: "Cache directory"
+    default: "/tmp"
+    when: "cache_size"
+`))
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+
+	defaults, err := runner.New(strings.NewReader(""), io.Discard, 0, false).RunDefaults(wiz)
+	if err != nil {
+		t.Fatalf("RunDefaults error: %v", err)
+	}
+	interactive, err := runner.New(strings.NewReader(""), io.Discard, 0, false).Run(context.Background(), wiz)
+	if err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+	if !reflect.DeepEqual(defaults, interactive) {
+		t.Errorf("conditional wizard diverged:\n defaults:    %#v\n interactive: %#v", defaults, interactive)
+	}
+
+	// use_db is true, so db_name is asked; cache is false, so cache_size is
+	// skipped — and cache_dir, which depends on the skipped step, is skipped
+	// too rather than reappearing.
+	if _, ok := defaults["db_name"]; !ok {
+		t.Error("db_name is missing: its condition holds, so it should have been asked")
+	}
+	for _, skipped := range []string{"cache_size", "cache_dir"} {
+		if _, ok := defaults[skipped]; ok {
+			t.Errorf("%s is present: a skipped step must contribute no key", skipped)
+		}
+	}
+}
+
 // TestThemeParity is the invariant that makes theming safe to expose: a theme
 // changes what the wizard looks like and nothing else. The same spec run under
 // every preset must return byte-identical answers, so a tool can restyle a

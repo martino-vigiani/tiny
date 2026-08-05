@@ -1,0 +1,66 @@
+# A wizard that asks different questions depending on the answers.
+#
+#   tiny examples/branching.yaml
+#   tiny -defaults examples/branching.yaml     # the same branches, no human
+#
+# A step carrying `when:` runs only if its condition holds. A skipped step
+# contributes no key to the JSON, so the consumer sees which questions were
+# actually asked — not a value nobody chose.
+steps:
+  - type: select
+    key: kind
+    title: "What are you deploying?"
+    options: [service, static-site, cron-job]
+    default: service
+
+  # Only a service listens on a port.
+  - type: number
+    key: port
+    title: "Port"
+    min: 1
+    max: 65535
+    default: 8080
+    when: "kind == service"
+
+  - type: confirm
+    key: use_db
+    title: "Does it need a database?"
+    default: "yes"
+    when: "kind == service"
+
+  # Chained: this depends on a step that is itself conditional, so it is
+  # skipped whenever use_db is skipped or false.
+  - type: select
+    key: db_engine
+    title: "Database engine"
+    options: [postgres, mysql, sqlite]
+    default: postgres
+    when: "use_db"
+
+  - type: input
+    key: build_dir
+    title: "Build output directory"
+    default: "dist"
+    when: "kind == static-site"
+
+  - type: input
+    key: schedule
+    title: "Cron schedule"
+    placeholder: "0 * * * *"
+    default: "0 * * * *"
+    when: "kind == cron-job"
+
+  # `in` matches any of several values.
+  - type: multiselect
+    key: regions
+    title: "Regions"
+    options: [eu-west-1, us-east-1, ap-south-1]
+    default: "eu-west-1"
+    when: "kind in service|static-site"
+
+  # `contains` looks inside a collection answer.
+  - type: confirm
+    key: gdpr_ack
+    title: "Acknowledge EU data residency rules?"
+    default: "yes"
+    when: "regions contains eu-west-1"

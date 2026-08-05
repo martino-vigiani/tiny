@@ -65,7 +65,18 @@ type Step struct {
 	EditorCmd   string     `yaml:"editor,omitempty"`
 	Format      string     `yaml:"format,omitempty"`
 	Delimiter   string     `yaml:"delimiter,omitempty"`
+
+	// When is an optional condition on an earlier answer; the step runs only
+	// if it holds. See condition.go for the expression language.
+	When string `yaml:"when,omitempty"`
+
+	// cond is When parsed, filled by Validate so every run reuses it.
+	cond *Condition
 }
+
+// Condition returns the step's parsed `when:` expression, or nil when the step
+// is unconditional. It is only populated after validation.
+func (s Step) Condition() *Condition { return s.cond }
 
 // Parse decodes a wizard spec from YAML bytes and validates it.
 func Parse(data []byte) (*Wizard, error) {
@@ -88,18 +99,42 @@ func (w *Wizard) Validate() error {
 		return err
 	}
 	seen := map[string]bool{}
-	for i, s := range w.Steps {
+	for i := range w.Steps {
+		s := &w.Steps[i]
 		if s.Key == "" {
 			return fmt.Errorf("step %d: missing key", i+1)
 		}
 		if seen[s.Key] {
 			return fmt.Errorf("step %d: duplicate key %q", i+1, s.Key)
 		}
+		if err := s.parseCondition(seen); err != nil {
+			return err
+		}
 		seen[s.Key] = true
 		if err := s.validate(); err != nil {
 			return err
 		}
 	}
+	return nil
+}
+
+// parseCondition parses the step's `when:` expression and checks that it refers
+// to a key answered before this step. A forward reference is always false, so
+// rejecting it turns a step that would silently never run into a load error.
+func (s *Step) parseCondition(earlier map[string]bool) error {
+	if s.When == "" {
+		s.cond = nil
+		return nil
+	}
+	cond, err := ParseCondition(s.When)
+	if err != nil {
+		return fmt.Errorf("step %q: %v", s.Key, err)
+	}
+	if !earlier[cond.Key] {
+		return fmt.Errorf("step %q: condition %q refers to %q, which is not answered before this step",
+			s.Key, s.When, cond.Key)
+	}
+	s.cond = cond
 	return nil
 }
 

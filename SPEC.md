@@ -89,6 +89,7 @@ steps:
 | `editor`      | string               | `""`    | `editor`                                        | Editor command override (may include args). Falls back to `$VISUAL`, then `$EDITOR`. |
 | `format`      | string               | `"date"`| `date`                                          | `"date"` (`YYYY-MM-DD`) or `"datetime"` (`YYYY-MM-DD HH:MM:SS`).      |
 | `delimiter`   | string               | `""`    | —                                               | Parsed but **currently unused** (forward compatibility).              |
+| `when`        | string               | `""`    | all                                             | Condition on an earlier answer; the step runs only if it holds. See *Conditional steps*. |
 
 **Convention:** give every step a `title` (short, sentence case, in English). If a step has
 neither `title` nor `prompt`, the header is empty.
@@ -559,6 +560,67 @@ env_REGION=eu-west-1
 
 Prefer `-format json` piped through `jq` when values can be arbitrary; `env` is a
 convenience, JSON is the interchange format.
+
+---
+
+## Conditional steps
+
+A step carrying `when:` runs only if its condition holds against the answers
+collected **before** it.
+
+```yaml
+steps:
+  - type: confirm
+    key: use_db
+    title: "Does it need a database?"
+    default: "yes"
+
+  - type: select
+    key: db_engine
+    title: "Database engine"
+    options: [postgres, mysql, sqlite]
+    default: postgres
+    when: "use_db"
+```
+
+**A skipped step contributes no key to the output.** The consumer sees which
+questions were actually asked, rather than a value nobody chose. Code reading
+the answers must therefore treat a missing key as "not asked" — which is also
+how it distinguishes a skipped step from an empty answer.
+
+### The condition language
+
+Six forms, no precedence, no arithmetic. It exists so a wizard can branch, not
+so a wizard can compute.
+
+| Form | True when |
+|------|-----------|
+| `key` | the answer is truthy: `true`, a non-empty string or collection, a non-zero number |
+| `!key` | the answer is falsy |
+| `key == value` | the answer equals the value (text comparison, case-insensitive) |
+| `key != value` | it does not |
+| `key in a\|b\|c` | the answer equals any of the alternatives |
+| `key contains value` | the collection holds the value (or the string contains it) |
+
+Values with spaces are quoted: `when: 'label == "two words"'`. A `confirm`
+answer accepts `true`/`false` and `yes`/`no`. For a `multiselect`, `==` and `in`
+match when **any** chosen option matches, so `platforms in iOS|tvOS` means "at
+least one of these was chosen".
+
+### Rules
+
+- A condition may only reference a key answered **earlier** in the wizard. A
+  forward or self reference is a load error, not a step that silently never
+  runs.
+- **Skipping is transitive.** A condition on a key that was itself skipped is
+  false, so a chain of dependent steps drops out together.
+- Conditions read only answers, so they resolve identically interactively and
+  under `-defaults`: both paths skip the same steps and return the same map.
+  `TestConditionalParity` enforces it.
+- A skipped step is never validated for `required:` — `required` means "must be
+  answered *if asked*".
+
+See `examples/branching.yaml` for a wizard exercising every form.
 
 ---
 
