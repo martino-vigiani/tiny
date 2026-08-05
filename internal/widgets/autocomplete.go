@@ -18,6 +18,9 @@ func (autocompleteWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, 
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if env.rich() {
+		return richFilter(ctx, s, env, matchPrefix)
+	}
 	PrintHeader(env, s.Prompt())
 	if s.Placeholder != "" {
 		PrintNotef(env, "Hint: %s", s.Placeholder)

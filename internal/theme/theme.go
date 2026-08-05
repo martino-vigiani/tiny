@@ -45,6 +45,15 @@ type Symbols struct {
 	HintOpen      *string `yaml:"hint_open,omitempty"`
 	HintClose     *string `yaml:"hint_close,omitempty"`
 	TableRule     *string `yaml:"table_rule,omitempty"`
+
+	// Interactive mode only: the row cursor, the checkbox marks, and the
+	// caret drawn at the end of the filter line.
+	Cursor      *string `yaml:"cursor,omitempty"`
+	CursorBlank *string `yaml:"cursor_blank,omitempty"`
+	Checked     *string `yaml:"checked,omitempty"`
+	Unchecked   *string `yaml:"unchecked,omitempty"`
+	Caret       *string `yaml:"caret,omitempty"`
+	Ellipsis    *string `yaml:"ellipsis,omitempty"`
 }
 
 // Styles map each rendered element to a style expression (see ParseStyle).
@@ -58,6 +67,11 @@ type Styles struct {
 	Error       *string `yaml:"error,omitempty"`
 	Note        *string `yaml:"note,omitempty"`
 	TableHeader *string `yaml:"table_header,omitempty"`
+
+	// Interactive mode only.
+	Cursor   *string `yaml:"cursor,omitempty"`
+	Selected *string `yaml:"selected,omitempty"`
+	Filter   *string `yaml:"filter,omitempty"`
 }
 
 // Color modes accepted by Theme.Color.
@@ -100,6 +114,19 @@ type Resolved struct {
 
 	// TableRule is the unit repeated to draw the header separator.
 	TableRule string
+
+	// Interactive mode: the row cursor, the checkbox marks, the filter caret
+	// and the marker for a line clipped to the terminal width.
+	Cursor      string
+	CursorBlank string
+	Checked     string
+	Unchecked   string
+	Caret       string
+	Ellipsis    string
+
+	CursorOpen, CursorClose     string
+	SelectedOpen, SelectedClose string
+	FilterOpen, FilterClose     string
 }
 
 // reset is the ANSI sequence closing every style opened by ParseStyle.
@@ -126,6 +153,12 @@ var presets = map[string]Theme{
 			HintOpen:      ptr("["),
 			HintClose:     ptr("]"),
 			TableRule:     ptr("-"),
+			Cursor:        ptr("> "),
+			CursorBlank:   ptr("  "),
+			Checked:       ptr("[x] "),
+			Unchecked:     ptr("[ ] "),
+			Caret:         ptr("_"),
+			Ellipsis:      ptr("..."),
 		},
 		Styles: Styles{
 			Header:      ptr("bold"),
@@ -137,6 +170,9 @@ var presets = map[string]Theme{
 			Error:       ptr("red"),
 			Note:        ptr("dim"),
 			TableHeader: ptr("bold"),
+			Cursor:      ptr("bold"),
+			Selected:    ptr("green"),
+			Filter:      ptr(""),
 		},
 	},
 	// minimal: no decoration around titles, nothing but the words.
@@ -168,6 +204,11 @@ var presets = map[string]Theme{
 			ErrorPrefix:   ptr("✗ "),
 			NotePrefix:    ptr("· "),
 			TableRule:     ptr("─"),
+			Cursor:        ptr("❯ "),
+			Checked:       ptr("◉ "),
+			Unchecked:     ptr("◯ "),
+			Caret:         ptr("▏"),
+			Ellipsis:      ptr("…"),
 		},
 		Styles: Styles{
 			Header: ptr("bold cyan"),
@@ -284,6 +325,9 @@ func (s Styles) all() map[string]*string {
 		"error":        s.Error,
 		"note":         s.Note,
 		"table_header": s.TableHeader,
+		"cursor":       s.Cursor,
+		"selected":     s.Selected,
+		"filter":       s.Filter,
 	}
 }
 
@@ -315,6 +359,12 @@ func mergeSymbols(base, over Symbols) Symbols {
 	pick(&base.HintOpen, over.HintOpen)
 	pick(&base.HintClose, over.HintClose)
 	pick(&base.TableRule, over.TableRule)
+	pick(&base.Cursor, over.Cursor)
+	pick(&base.CursorBlank, over.CursorBlank)
+	pick(&base.Checked, over.Checked)
+	pick(&base.Unchecked, over.Unchecked)
+	pick(&base.Caret, over.Caret)
+	pick(&base.Ellipsis, over.Ellipsis)
 	return base
 }
 
@@ -328,6 +378,9 @@ func mergeStyles(base, over Styles) Styles {
 	pick(&base.Error, over.Error)
 	pick(&base.Note, over.Note)
 	pick(&base.TableHeader, over.TableHeader)
+	pick(&base.Cursor, over.Cursor)
+	pick(&base.Selected, over.Selected)
+	pick(&base.Filter, over.Filter)
 	return base
 }
 
@@ -411,6 +464,9 @@ func Resolve(t Theme, colorCapable bool) (*Resolved, error) {
 	errorOn, errorOff := style(full.Styles.Error)
 	noteOn, noteOff := style(full.Styles.Note)
 	tableOn, tableOff := style(full.Styles.TableHeader)
+	cursorOn, cursorOff := style(full.Styles.Cursor)
+	selectedOn, selectedOff := style(full.Styles.Selected)
+	filterOn, filterOff := style(full.Styles.Filter)
 
 	sym := full.Symbols
 	// The header's leading newlines must stay outside the escape sequence:
@@ -448,6 +504,18 @@ func Resolve(t Theme, colorCapable bool) (*Resolved, error) {
 		ErrorPrefix:      deref(sym.ErrorPrefix),
 		NotePrefix:       deref(sym.NotePrefix),
 		TableRule:        deref(sym.TableRule),
+		Cursor:           deref(sym.Cursor),
+		CursorBlank:      deref(sym.CursorBlank),
+		Checked:          deref(sym.Checked),
+		Unchecked:        deref(sym.Unchecked),
+		Caret:            deref(sym.Caret),
+		Ellipsis:         deref(sym.Ellipsis),
+		CursorOpen:       cursorOn,
+		CursorClose:      cursorOff,
+		SelectedOpen:     selectedOn,
+		SelectedClose:    selectedOff,
+		FilterOpen:       filterOn,
+		FilterClose:      filterOff,
 	}
 	if r.TableRule == "" {
 		r.TableRule = "-"

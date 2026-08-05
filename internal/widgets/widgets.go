@@ -14,6 +14,7 @@ import (
 
 	"golang.org/x/term"
 
+	"github.com/martino-vigiani/tiny/internal/keys"
 	"github.com/martino-vigiani/tiny/internal/spec"
 	"github.com/martino-vigiani/tiny/internal/theme"
 )
@@ -36,10 +37,28 @@ type Env struct {
 	IsTTY   bool
 	Theme   *theme.Resolved
 
+	// Rich turns on the live, redrawing prompt: arrow keys, type-to-filter,
+	// space to toggle. It is false by default, so every path that does not
+	// explicitly ask for it — pipes, CI, tests — behaves exactly as before.
+	Rich bool
+
+	// Keys, when set, supplies keystrokes instead of the terminal. It is the
+	// seam that lets an interactive widget be tested without a terminal, and
+	// setting it also means raw mode is never entered.
+	Keys keys.Source
+
+	// Size overrides terminal size detection, for tests.
+	Size func() (width, height int)
+
 	// buf is a reusable line buffer: rendering a step appends into it and
 	// writes once, which keeps drawing allocation-free after the first step.
-	buf []byte
+	buf   []byte
+	frame frame
 }
+
+// errAbandoned is returned when the user closes the input stream (Ctrl-D) at a
+// live prompt: the step is over, with whatever the default provides.
+var errAbandoned = errors.New("input closed")
 
 // defaultTheme is the compiled fallback for an Env with no theme. It is built
 // once, on first use, and never mutated.

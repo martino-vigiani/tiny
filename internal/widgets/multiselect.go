@@ -33,6 +33,12 @@ func (multiselectWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, e
 	// The default is resolved once: it decides both what the list shows as
 	// preselected and what an empty answer returns.
 	marks, defErr := defaultMarks(s)
+	if env.rich() {
+		if defErr != nil {
+			return nil, defErr
+		}
+		return richMultiselect(ctx, s, env, marks)
+	}
 	PrintListMarkedHeight(env, s.Options, marks, s.Height)
 	for {
 		if err := ctx.Err(); err != nil {
@@ -88,4 +94,26 @@ func (multiselectWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, e
 		}
 		return spec.OptionsFor(selected, s.Options), nil
 	}
+}
+
+// richMultiselect runs the live picker with the default's marks preselected.
+// The answer is built exactly as the line-based path builds it, so both return
+// the options in spec order.
+func richMultiselect(ctx context.Context, s spec.Step, env *Env, marks []bool) (any, error) {
+	if marks == nil {
+		marks = make([]bool, len(s.Options))
+	}
+	p := newPicker(s, marks, true, matchSubstring, "space to toggle, enter to confirm")
+	chosen, err := runPicker(ctx, env, p)
+	if err != nil {
+		if err == errAbandoned {
+			return spec.OptionsFor(marks, s.Options), nil
+		}
+		return nil, err
+	}
+	picked := make([]bool, len(s.Options))
+	for _, i := range chosen {
+		picked[i] = true
+	}
+	return spec.OptionsFor(picked, s.Options), nil
 }

@@ -19,6 +19,7 @@ import (
 
 	"golang.org/x/term"
 
+	"github.com/martino-vigiani/tiny/internal/keys"
 	"github.com/martino-vigiani/tiny/internal/runner"
 	"github.com/martino-vigiani/tiny/internal/spec"
 	"github.com/martino-vigiani/tiny/internal/theme"
@@ -41,6 +42,7 @@ func run(args []string) int {
 	listThemes := fs.Bool("list-themes", false, "print the built-in theme presets and exit")
 	requireTTY := fs.Bool("require-tty", false, "fail instead of falling back to defaults when there is no terminal")
 	compact := fs.Bool("compact", false, "print the JSON payload on one line")
+	plain := fs.Bool("plain", false, "disable the interactive prompt; ask one line at a time")
 	showVersion := fs.Bool("version", false, "print version and exit")
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage:\n  tiny [flags] <wizard.yaml>\n"+
@@ -143,6 +145,13 @@ func run(args []string) int {
 	ui := bufio.NewWriter(os.Stderr)
 	r := runner.New(in, ui, int(in.Fd()), isTTY)
 	r.SetTheme(resolved)
+	r.SetRich(richCapable(isTTY, *plain))
+
+	// Raw mode disables the terminal's own signal handling, so a terminal left
+	// raw is a shell the user has to repair by hand. Restoration is wired to
+	// both the signal context and a final defer.
+	context.AfterFunc(ctx, keys.RestoreAll)
+	defer keys.RestoreAll()
 
 	var answers map[string]any
 	if *useDefaults {
@@ -300,6 +309,24 @@ func loadTheme(ref string) (*theme.Theme, error) {
 	}
 	return theme.Parse(data)
 }
+
+// richCapable decides whether to draw the live, redrawing prompt.
+//
+// It needs a terminal on both ends — stdin to read keys from, stderr to draw on
+// — and a TERM that means something. Anywhere else (a pipe, CI, an agent's
+// sandboxed shell) the line-based path runs unchanged, which is what keeps the
+// headless and interactive answers identical.
+func richCapable(stdinIsTTY, plain bool) bool {
+	if plain || os.Getenv("TINY_PLAIN") != "" {
+		return false
+	}
+	if term := os.Getenv("TERM"); term == "" || term == "dumb" {
+		return false
+	}
+	return stdinIsTTY && isTerminal(os.Stderr)
+}
+
+func isTerminal(f *os.File) bool { return term.IsTerminal(int(f.Fd())) }
 
 // colorCapable reports whether the UI stream can render ANSI escapes: stderr
 // must be a terminal and TERM must not be "dumb".

@@ -18,6 +18,9 @@ func (searchWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, error)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if env.rich() {
+		return richFilter(ctx, s, env, matchSubstring)
+	}
 	PrintHeader(env, s.Prompt())
 	for {
 		if err := ctx.Err(); err != nil {
@@ -98,4 +101,46 @@ func searchDefault(def any, options []string) string {
 		return canon
 	}
 	return ""
+}
+
+// richFilter is the live prompt behind both search and autocomplete: the same
+// list and cursor, differing only in how a match is decided.
+func richFilter(ctx context.Context, s spec.Step, env *Env, match matchFunc) (any, error) {
+	def := searchDefault(s.Default, s.Options)
+	marks := make([]bool, len(s.Options))
+	if def != "" {
+		if i := indexFold(s.Options, def); i >= 0 {
+			marks[i] = true
+		}
+	}
+	p := newPicker(s, marks, false, match, "type to filter")
+	p.refilter()
+	if def != "" {
+		for i, idx := range p.shown {
+			if marks[idx] {
+				p.cursor = i
+				break
+			}
+		}
+	}
+	chosen, err := runPicker(ctx, env, p)
+	if err != nil {
+		if err == errAbandoned {
+			if def != "" {
+				return def, nil
+			}
+			if s.Required {
+				return nil, unexpectedEOF(s.Key)
+			}
+			return "", nil
+		}
+		return nil, err
+	}
+	if len(chosen) == 0 {
+		if def != "" {
+			return def, nil
+		}
+		return "", nil
+	}
+	return s.Options[chosen[0]], nil
 }

@@ -40,6 +40,13 @@ func New(r io.Reader, ui io.Writer, stdinFd int, isTTY bool) *Runner {
 	}
 }
 
+// SetRich turns on the live, redrawing prompt for the widgets that support it.
+// The caller decides: it knows whether there is a terminal and whether the user
+// asked to opt out.
+func (r *Runner) SetRich(on bool) {
+	r.env.Rich = on
+}
+
 // SetTheme installs the compiled theme used to draw every subsequent step.
 // A Runner with no theme draws with the built-in default.
 func (r *Runner) SetTheme(t *theme.Resolved) {
