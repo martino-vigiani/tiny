@@ -100,7 +100,7 @@ var attrArity = map[string]int{
 	"--message": 1, "--min-length": 1, "--max-length": 1,
 	"--match": 1, "--min-select": 1, "--max-select": 1, "--root": 1,
 	"--return-column": 1,
-	"--required": 0, "--allow-custom": 0, "--dirs": 0, "--hidden": 0,
+	"--required":      0, "--allow-custom": 0, "--dirs": 0, "--hidden": 0,
 }
 
 func parseShortStep(words []string, n int) (Step, error) {
