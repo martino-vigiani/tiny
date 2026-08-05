@@ -5,7 +5,6 @@ package runner
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"sort"
@@ -60,13 +59,6 @@ func (r *Runner) Run(ctx context.Context, wiz *spec.Wizard) (map[string]any, err
 		answers[step.Key] = value
 	}
 	return answers, nil
-}
-
-// PrintJSON serialises answers as indented JSON.
-func PrintJSON(w io.Writer, answers map[string]any) error {
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	return enc.Encode(answers)
 }
 
 // PrintYAML serialises answers as YAML.
