@@ -81,7 +81,7 @@ func TestLoadTheme(t *testing.T) {
 
 func TestWriteAnswersToFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "out.json")
-	if err := writeAnswers(path, "json", map[string]any{"name": "MyApp"}); err != nil {
+	if err := writeAnswers(path, "json", false, map[string]any{"name": "MyApp"}); err != nil {
 		t.Fatalf("writeAnswers error: %v", err)
 	}
 	data, err := os.ReadFile(path)
@@ -167,3 +167,50 @@ func writeFile(t *testing.T, path, content string) {
 }
 
 func ptr(s string) *string { return &s }
+
+// The short form must reach the same wizard as a spec file, end to end.
+func TestShortFormEndToEnd(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds the binary; skipped under -short")
+	}
+	bin := filepath.Join(t.TempDir(), "tiny")
+	if out, err := exec.Command("go", "build", "-o", bin, ".").CombinedOutput(); err != nil {
+		t.Fatalf("building tiny: %v\n%s", err, out)
+	}
+
+	cmd := exec.Command(bin, "-defaults", "-compact",
+		"select", "framework", "SwiftUI", "UIKit", "+", "confirm", "git", "yes")
+	var stdout, stderr strings.Builder
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("running tiny: %v\nstderr: %s", err, stderr.String())
+	}
+	want := `{"framework":"SwiftUI","git":true}` + "\n"
+	if stdout.String() != want {
+		t.Errorf("stdout = %q, want %q", stdout.String(), want)
+	}
+}
+
+// A spec file whose name happens to be a step type is still reachable.
+func TestPathBeatsShortTypeWhenQualified(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds the binary; skipped under -short")
+	}
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "tiny")
+	if out, err := exec.Command("go", "build", "-o", bin, ".").CombinedOutput(); err != nil {
+		t.Fatalf("building tiny: %v\n%s", err, out)
+	}
+	specPath := filepath.Join(dir, "select")
+	writeFile(t, specPath, "steps:\n  - {type: input, key: k, title: K, default: v}\n")
+
+	cmd := exec.Command(bin, "-defaults", "-compact", specPath)
+	var stdout, stderr strings.Builder
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("running tiny: %v\nstderr: %s", err, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"k":"v"`) {
+		t.Errorf("stdout = %q, want the file to have been read as a path", stdout.String())
+	}
+}

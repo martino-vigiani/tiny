@@ -107,6 +107,78 @@ func appendJSONFloat(b []byte, f float64) []byte {
 	return b
 }
 
+// PrintJSONCompact writes the same payload on a single line, with no indent
+// and no spaces. It exists because a caller that reads the payload back — an
+// agent, a script — pays for every byte of whitespace and gains nothing from
+// it: the compact form is about 40% smaller for the same information.
+func PrintJSONCompact(w io.Writer, answers map[string]any) error {
+	keys := sortedKeys(answers)
+	b := make([]byte, 0, 256)
+	b = append(b, '{')
+	for i, k := range keys {
+		if i > 0 {
+			b = append(b, ',')
+		}
+		b = appendJSONString(b, k)
+		b = append(b, ':')
+		b = appendJSONValueCompact(b, answers[k])
+	}
+	b = append(b, '}', '\n')
+	_, err := w.Write(b)
+	return err
+}
+
+func appendJSONValueCompact(b []byte, v any) []byte {
+	switch t := v.(type) {
+	case []string:
+		if t == nil {
+			return append(b, "null"...)
+		}
+		b = append(b, '[')
+		for i, s := range t {
+			if i > 0 {
+				b = append(b, ',')
+			}
+			b = appendJSONString(b, s)
+		}
+		return append(b, ']')
+	case map[string]string:
+		if t == nil {
+			return append(b, "null"...)
+		}
+		b = append(b, '{')
+		for i, k := range sortedMapKeys(t) {
+			if i > 0 {
+				b = append(b, ',')
+			}
+			b = appendJSONString(b, k)
+			b = append(b, ':')
+			b = appendJSONString(b, t[k])
+		}
+		return append(b, '}')
+	default:
+		return appendJSONValue(b, v)
+	}
+}
+
+func sortedKeys(answers map[string]any) []string {
+	keys := make([]string, 0, len(answers))
+	for k := range answers {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func sortedMapKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
 // PrintJSON serialises answers as indented JSON, keys sorted.
 func PrintJSON(w io.Writer, answers map[string]any) error {
 	keys := make([]string, 0, len(answers))

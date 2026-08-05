@@ -40,9 +40,14 @@ func run(args []string) int {
 	output := fs.String("o", "", "write the answers to this file instead of stdout")
 	listThemes := fs.Bool("list-themes", false, "print the built-in theme presets and exit")
 	requireTTY := fs.Bool("require-tty", false, "fail instead of falling back to defaults when there is no terminal")
+	compact := fs.Bool("compact", false, "print the JSON payload on one line")
 	showVersion := fs.Bool("version", false, "print version and exit")
 	fs.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage:\n  tiny [flags] <wizard.yaml>\n  tiny [flags] -            read the spec from stdin (answers come from /dev/tty)\n\nFlags:\n")
+		fmt.Fprintf(os.Stderr, "Usage:\n  tiny [flags] <wizard.yaml>\n"+
+			"  tiny [flags] -                        read the spec from stdin\n"+
+			"  tiny [flags] <type> <key> [value...]  write the wizard as arguments\n\n"+
+			"    e.g. tiny select framework SwiftUI UIKit + confirm git yes\n"+
+			"    types: %s\n\nFlags:\n", spec.ShortTypeNames())
 		fs.PrintDefaults()
 		fmt.Fprintf(os.Stderr, "\nThe wizard is drawn on stderr and the answers are written to stdout,\n"+
 			"so `tiny w.yaml | jq` works while the user still sees the prompts.\n"+
@@ -69,7 +74,7 @@ func run(args []string) int {
 		}
 		return 0
 	}
-	if fs.NArg() != 1 {
+	if fs.NArg() == 0 {
 		fs.Usage()
 		return 2
 	}
@@ -80,15 +85,33 @@ func run(args []string) int {
 		return 2
 	}
 
-	data, err := readSpec(fs.Arg(0))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "tiny: %v\n", err)
-		return 1
-	}
-	wiz, err := spec.Parse(data)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "tiny: invalid wizard: %v\n", err)
-		return 1
+	// A first argument naming a step type means the wizard was written as argv
+	// words; anything else is a path, or "-" for stdin. flag.Parse stops at the
+	// first non-flag argument, so the whole short form — its own --attributes
+	// included — arrives untouched in fs.Args().
+	var wiz *spec.Wizard
+	var err error
+	if spec.IsShortType(fs.Arg(0)) {
+		wiz, err = spec.ParseShort(fs.Args())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "tiny: %v\n", err)
+			return 2
+		}
+	} else {
+		if fs.NArg() != 1 {
+			fs.Usage()
+			return 2
+		}
+		data, readErr := readSpec(fs.Arg(0))
+		if readErr != nil {
+			fmt.Fprintf(os.Stderr, "tiny: %v\n", readErr)
+			return 1
+		}
+		wiz, err = spec.Parse(data)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "tiny: invalid wizard: %v\n", err)
+			return 1
+		}
 	}
 
 	resolved, err := resolveTheme(wiz.Theme, *themeRef, *noColor)
@@ -135,7 +158,7 @@ func run(args []string) int {
 		return 1
 	}
 
-	if err := writeAnswers(*output, *format, answers); err != nil {
+	if err := writeAnswers(*output, *format, *compact, answers); err != nil {
 		fmt.Fprintf(os.Stderr, "tiny: %v\n", err)
 		return 1
 	}
@@ -196,7 +219,7 @@ func emptyInput() (*os.File, func()) {
 
 // writeAnswers serialises answers in the requested format to path, or to
 // stdout when path is empty.
-func writeAnswers(path, format string, answers map[string]any) error {
+func writeAnswers(path, format string, compact bool, answers map[string]any) error {
 	var w io.Writer = os.Stdout
 	if path != "" {
 		f, err := os.Create(path)
@@ -214,7 +237,11 @@ func writeAnswers(path, format string, answers map[string]any) error {
 	case "env":
 		err = runner.PrintEnv(bw, answers)
 	default:
-		err = runner.PrintJSON(bw, answers)
+		if compact {
+			err = runner.PrintJSONCompact(bw, answers)
+		} else {
+			err = runner.PrintJSON(bw, answers)
+		}
 	}
 	if err != nil {
 		return err
