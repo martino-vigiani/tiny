@@ -197,6 +197,12 @@ func (p *picker) refilter() {
 	}
 	if p.rank && p.filter != "" {
 		p.sortByScore()
+		// Ranked results put the best match first, and that is the answer the
+		// user is reaching for: keeping the cursor on whatever it was on before
+		// would leave it parked on a worse match than the one now at the top,
+		// which reads as the ranking not working.
+		p.cursor = 0
+		return
 	}
 	p.cursor = 0
 	if was >= 0 {
@@ -375,9 +381,16 @@ func (p *picker) draw(env *Env) {
 			}
 			env.buf = append(env.buf, t.SelectedClose...)
 		}
+		// A non-cursor row still carries the theme's option style; without it
+		// half a theme file only ever affected the numbered list.
+		if !active {
+			env.buf = append(env.buf, t.OptionOpen...)
+		}
 		env.appendClipped(opt, used)
 		if active {
 			env.buf = append(env.buf, t.CursorClose...)
+		} else {
+			env.buf = append(env.buf, t.OptionClose...)
 		}
 		env.endLine()
 	}

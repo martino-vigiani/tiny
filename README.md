@@ -295,10 +295,16 @@ from the answers — and runs headless with `--ci`.
 
 ## What a spec cannot do
 
-A tiny spec is **inert**. It cannot run a command, read a file, or reach the
-network — there is no `exec:` and there will not be one. You can receive one by
-email, generate one from an untrusted issue, or `curl | tiny -` it, and the
-worst it can do is ask you a question.
+A tiny spec is **inert**. It cannot run a command, reach the network, or read a
+file you did not point it at — there is no `exec:` and there will not be one.
+You can receive one by email, generate one from an untrusted issue, or
+`curl | tiny -` it, and the worst it can do is ask you a question.
+
+Three things enforce that, each of which was once a hole an adversarial review
+found and closed: the editor a step opens comes from `$VISUAL`/`$EDITOR` only,
+never from the spec; a `file` step's listing cannot walk above where it started,
+symlinks resolved before the check; and control characters are stripped from
+spec text, so an option cannot retitle your window or write your clipboard.
 
 That is a deliberate refusal, not a missing feature. The moment a spec can run
 something, every one of those becomes remote code execution, and a coding agent

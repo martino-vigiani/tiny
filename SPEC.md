@@ -39,6 +39,20 @@ tiny wizard.yaml | jq .framework
 Never parse the prompts. Their wording and decoration are themable (see *Theme* below) and
 are not part of this specification; only the payload is.
 
+### The inertness guarantee
+
+> **A spec asks questions. It cannot do anything else.**
+
+No step runs a command, opens a network connection, or reads a file the person
+running it did not point it at. A `file` step is confined to its `root`, with
+symlinks resolved before the check. The `editor:` field is parsed for
+compatibility and ignored: the editor comes from `$VISUAL`/`$EDITOR`. Control
+characters are stripped from every piece of text a spec supplies, so an option
+cannot emit escape sequences to the terminal.
+
+This is what makes it safe to generate a spec from untrusted input, or to run
+one you were sent.
+
 ### The presentation guarantee
 
 > **How a wizard is drawn never changes what it answers.**
@@ -95,7 +109,7 @@ steps:
 | `headers`     | `[]string`           | nil     | `table`                                         | Column headers (drawn as a header row + separator).                   |
 | `rows`        | `[][]string`         | nil     | `table`                                         | Data rows.                                                            |
 | `selectable`  | bool                 | `false` | `table`                                         | True ⇒ the table becomes a row picker that answers a 0-based index.   |
-| `editor`      | string               | `""`    | `editor`                                        | Editor command override (may include args). Falls back to `$VISUAL`, then `$EDITOR`. |
+| `editor`      | string               | `""`    | `editor`                                        | **Parsed and ignored.** The editor comes from `$VISUAL`/`$EDITOR` only — honouring it from a spec was arbitrary code execution. |
 | `format`      | string               | `"date"`| `date`                                          | `"date"` (`YYYY-MM-DD`) or `"datetime"` (`YYYY-MM-DD HH:MM:SS`).      |
 | `delimiter`   | string               | `""`    | —                                               | Parsed but **currently unused** (forward compatibility).              |
 | `when`        | string               | `""`    | all                                             | Condition on an earlier answer; the step runs only if it holds. See *Conditional steps*. |
@@ -105,7 +119,7 @@ steps:
 | `max_select`  | int                  | `0`     | `multiselect`                                   | Most options that may be chosen. `0` is unbounded.                    |
 | `allow_custom`| bool                 | `false` | `search`, `autocomplete`                        | Accept typed text that is not one of the options.                     |
 | `return_column`| int                 | `0`     | `table`                                         | Answer with this column's value (1-based) instead of the row index.   |
-| `root`        | string               | `"."`   | `file`                                          | Directory the listing starts in.                                      |
+| `root`        | string               | `"."`   | `file`                                          | Directory the listing is confined to; it cannot walk above it.        |
 | `dirs`        | bool                 | `false` | `file`                                          | Choose a directory instead of descending into it.                     |
 | `hidden`      | bool                 | `false` | `file`                                          | Include dot-files in the listing.                                     |
 
