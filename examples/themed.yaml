@@ -1,0 +1,60 @@
+# A wizard that ships its own look.
+#
+#   tiny examples/themed.yaml                  # drawn with the theme below
+#   tiny -theme plain examples/themed.yaml     # the runner overrides it
+#   tiny -defaults examples/themed.yaml        # identical answers, either way
+#
+# The theme is presentation only: the JSON is the same under every look.
+theme:
+  preset: sleek
+  symbols:
+    prompt: "→ "
+    hint_open: "("
+    hint_close: ")"
+  styles:
+    header: "bold #bd93f9"
+    marker: "#50fa7b"
+    error: "bold red"
+
+steps:
+  - type: select
+    key: environment
+    title: "Deploy target"
+    options: [staging, production]
+    default: staging
+
+  - type: multiselect
+    key: services
+    title: "Services to deploy"
+    options: [api, worker, web, cron]
+    default: "api, web"
+
+  - type: input
+    key: release_tag
+    title: "Release tag"
+    placeholder: "v1.2.3"
+    default: "v0.1.0"
+
+  - type: number
+    key: replicas
+    title: "Replica count"
+    min: 1
+    max: 20
+    increment: 1
+    default: 3
+
+  - type: table
+    key: region
+    title: "Region"
+    headers: [Region, Latency, Cost]
+    rows:
+      - [eu-west-1, "12ms", "$$"]
+      - [us-east-1, "84ms", "$"]
+      - [ap-south-1, "160ms", "$"]
+    selectable: true
+    default: "eu-west-1"
+
+  - type: confirm
+    key: run_migrations
+    title: "Run database migrations?"
+    default: "no"

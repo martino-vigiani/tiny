@@ -1,0 +1,73 @@
+steps:
+  - type: select
+    key: region
+    title: "Primary region"
+    options: [eu-west-1, us-east-1, ap-southeast-1]
+    default: eu-west-1
+
+  - type: multiselect
+    key: regions
+    title: "Replica regions"
+    options: [eu-west-1, us-east-1, ap-southeast-1]
+    default: [eu-west-1, us-east-1]
+
+  - type: confirm
+    key: enable_billing_alerts
+    title: "Enable cost alerts?"
+    default: "yes"
+
+  - type: input
+    key: project_name
+    title: "Project name"
+    default: "demo"
+
+  - type: password
+    key: api_token
+    title: "API token"
+    placeholder: "sk-..."
+
+  - type: search
+    key: owner
+    title: "Repository owner (search)"
+    options: [alice, bob, carol]
+
+  - type: number
+    key: replicas
+    title: "Number of replicas"
+    min: 1
+    max: 10
+    increment: 1
+    default: 2
+
+  - type: date
+    key: release_date
+    title: "Release date"
+    format: date
+    default: "2026-01-15"
+
+  - type: keyvalue
+    key: env
+    title: "Environment variables (KEY=VALUE)"
+    default:
+      LOG_LEVEL: info
+      REGION: eu-west-1
+
+  - type: editor
+    key: description
+    title: "Project description (opens editor)"
+    default: "Replace this text."
+
+  - type: autocomplete
+    key: editor_bin
+    title: "Default editor (autocomplete)"
+    options: [vim, nvim, nano, code]
+
+  - type: table
+    key: permissions
+    title: "Permissions by role"
+    headers: [role, read, write]
+    rows:
+      - [admin, yes, yes]
+      - [dev, yes, no]
+    selectable: true
+    default: "dev"

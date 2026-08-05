@@ -1,0 +1,24 @@
+steps:
+  - type: select
+    key: language
+    title: "Language"
+    options: [Go, Rust, TypeScript]
+    default: Go
+
+  - type: input
+    key: project_name
+    title: "Project name"
+    placeholder: "my-project"
+
+  - type: confirm
+    key: init_git
+    title: "Initialize a git repository?"
+    default: "yes"
+
+  - type: number
+    key: workers
+    title: "Number of workers"
+    min: 1
+    max: 8
+    increment: 1
+    default: 2

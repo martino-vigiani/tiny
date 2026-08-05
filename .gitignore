@@ -1,0 +1,9 @@
+/tiny
+/tiny/
+/tiny.exe
+/dist/
+
+# Test and profiling artifacts
+*.test
+*.out
+*.prof

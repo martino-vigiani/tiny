@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -race ./...
+
+      - name: Benchmarks compile and run
+        run: go test -run XXX -bench . -benchtime 10x ./...
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+  # The wizard must stay runnable end to end, not just compilable: every shipped
+  # example has to resolve headless and produce valid JSON.
+  examples:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Build the binary
+        run: go build -trimpath -ldflags "-s -w" -o tiny ./cmd/tiny
+
+      - name: Every example resolves headless
+        run: |
+          for f in examples/*.yaml; do
+            echo "== $f"
+            ./tiny -defaults "$f" | jq -e . >/dev/null
+          done
+
+      - name: Every theme resolves
+        run: |
+          for t in $(./tiny -list-themes); do
+            ./tiny -defaults -theme "$t" examples/full.yaml >/dev/null
+          done
+          for f in themes/*.yaml; do
+            ./tiny -defaults -theme "$f" examples/full.yaml >/dev/null
+          done
+
+      - name: Themes never change the answers
+        run: |
+          ./tiny -defaults examples/full.yaml > /tmp/plainrun.json
+          for t in $(./tiny -list-themes); do
+            ./tiny -defaults -theme "$t" examples/full.yaml > /tmp/themed.json
+            diff /tmp/plainrun.json /tmp/themed.json
+          done
+
+      - name: The payload stays off the UI stream
+        run: |
+          printf '2\nDemo\nn\n4\n' | ./tiny examples/quickstart.yaml 2>/dev/null | jq -e . >/dev/null
+
+      - name: The example consumer runs headless
+        run: ./examples/scaffold.sh --ci
+        env:
+          TINY: ${{ github.workspace }}/tiny

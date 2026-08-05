@@ -1,0 +1,46 @@
+# brand — the template to copy when fitting tiny into your own CLI.
+#
+# Every field is optional: whatever you leave out keeps the value from the
+# preset named below. Start from this file, change the symbols and colors your
+# product already uses, and every wizard you ship looks like your tool.
+#
+#   tiny -theme themes/brand.yaml wizard.yaml
+#   TINY_THEME=themes/brand.yaml tiny wizard.yaml     # for a whole session
+name: brand
+
+# The look this theme starts from: default, minimal, sleek, ascii or plain.
+preset: minimal
+
+# auto (color only on a terminal), always (even when piped), never.
+color: auto
+
+symbols:
+  # Printed around a step's title. Keep the leading newline for breathing room.
+  header_prefix: "\n┌ "
+  header_suffix: "\n"
+  # The input marker, shown wherever the wizard waits for typing.
+  prompt: "└ "
+  # Option lists: indent + marker + index + bullet + label.
+  indent: "  "
+  default_marker: "▸"
+  item_marker: " "
+  bullet: "."
+  # Prepended to validation errors and to instruction lines.
+  error_prefix: "! "
+  note_prefix: ""
+  # Wrap inline hints such as the "[default]" shown next to a prompt.
+  hint_open: "("
+  hint_close: ")"
+  # Repeated to draw the separator under a table's header row.
+  table_rule: "─"
+
+styles:
+  header: "bold"
+  prompt: "cyan"
+  option: ""
+  index: "dim"
+  marker: "bold cyan"
+  hint: "dim"
+  error: "bold red"
+  note: "dim"
+  table_header: "bold underline"

@@ -1,0 +1,16 @@
+# Dracula — a truecolor theme, for terminals using the Dracula palette.
+#
+#   tiny -theme themes/dracula.yaml wizard.yaml
+name: dracula
+preset: sleek
+
+styles:
+  header: "bold #bd93f9"   # purple
+  prompt: "#ff79c6"        # pink
+  marker: "#50fa7b"        # green
+  index: "#6272a4"         # comment
+  option: "#f8f8f2"        # foreground
+  hint: "#6272a4"
+  error: "bold #ff5555"    # red
+  note: "#6272a4"
+  table_header: "bold #8be9fd"

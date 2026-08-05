@@ -1,0 +1,41 @@
+steps:
+  - type: select
+    key: framework
+    title: "Framework"
+    options:
+      - SwiftUI
+      - UIKit
+      - AppKit
+    default: SwiftUI
+
+  - type: multiselect
+    key: platforms
+    title: "Target platforms"
+    options:
+      - iOS
+      - macOS
+      - watchOS
+    default: "iOS, macOS"
+
+  - type: input
+    key: project_name
+    title: "Project name"
+    default: "MyApp"
+
+  - type: number
+    key: min_deploy
+    title: "Minimum iOS version"
+    min: 13
+    max: 18
+    increment: 1
+    default: 15
+
+  - type: password
+    key: signing_passphrase
+    title: "Signing passphrase"
+    default: ""
+
+  - type: confirm
+    key: init_git
+    title: "Initialize a git repository?"
+    default: "yes"

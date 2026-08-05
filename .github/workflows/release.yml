@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Test before releasing
+        run: go test ./...
+
+      # One static binary per platform. No cgo, no runtime dependencies, so a
+      # plain cross-compile is all a release needs.
+      - name: Cross-compile
+        run: |
+          mkdir -p dist
+          while read -r os arch; do
+            ext=""
+            [ "$os" = "windows" ] && ext=".exe"
+            out="dist/tiny-${os}-${arch}${ext}"
+            echo "building $out"
+            GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 \
+              go build -trimpath -ldflags "-s -w" -o "$out" ./cmd/tiny
+          done <<'TARGETS'
+          darwin arm64
+          darwin amd64
+          linux amd64
+          linux arm64
+          windows amd64
+          TARGETS
+
+      - name: Checksums
+        run: cd dist && sha256sum tiny-* > SHA256SUMS
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
