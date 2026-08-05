@@ -176,42 +176,95 @@ and restyled to match your own tool (`-theme`). All of it is in
 
 ## It also draws
 
-Four commands show something instead of asking. They exist because a script
-that asks well should not then go silent while it works:
+Four commands show something instead of asking, because a script that asks its
+questions well should not then go silent for two minutes while it works.
+
+**`tiny spin`** — put it in front of any slow command you already run. It draws a
+spinner until that command finishes, then gets out of the way:
 
 ```sh
-tiny spin "Building…" -- go build ./...   # spinner while a command runs
-tiny say "Deploy complete" --style header # one styled line
-tiny box "Plan" < plan.md                 # a bordered box
-tiny bar 3 12 "files"                     # a progress line, redrawn in place
+tiny spin "Building…" -- go build ./...
+```
+
+The command keeps working exactly as before: `tiny spin` exits with **its exit
+code**, and lets **its stdout through untouched**, so you can wrap something in
+the middle of a pipeline and nothing downstream notices.
+
+```sh
+tiny spin "Fetching" -- curl -s "$url" | jq .id    # jq still gets the payload
+```
+
+**`tiny bar`** — for a loop where *you* know the count. Each call redraws the
+same line instead of printing one per iteration, so a hundred files do not
+become a hundred lines of log:
+
+```sh
+n=0; total=$(ls *.png | wc -l)
+for f in *.png; do
+  optimise "$f"
+  n=$((n + 1))
+  tiny bar "$n" "$total" "images"
+done
+```
+
+**`tiny say`** — one line in the same style as the questions, so your script's
+own output does not look like it came from a different tool:
+
+```sh
+tiny say "Deployed $version to $env" --style header
+tiny say "Nothing to do" --style note
+tiny say "Rollback required" --style error
+```
+
+**`tiny box`** — for the thing the user must actually read before answering: a
+plan, a list of what is about to be overwritten, a warning. A frame is what
+keeps it from scrolling past unnoticed:
+
+```sh
+git diff --stat | tiny box "About to commit"
 ```
 
 <p align="center">
   <img src="docs/media/display.svg" alt="say, spin, bar and box drawing in sequence in the terminal" width="100%">
 </p>
 
-`tiny spin` exits with its child's exit code and lets the child's stdout through
-untouched, so it is safe to drop into a pipeline. Without a terminal all four
-degrade to one plain line with no escape sequences — a CI log full of spinner
-frames is why people turn spinners off.
+Without a terminal — CI, a cron job, a log file — all four drop the animation
+and print one plain line with no escape sequences at all. A build log full of
+spinner frames is why people turn spinners off; here there is nothing to turn
+off.
 
-## With a coding agent
+## Letting an agent write the questions
 
-Ask for it in one sentence:
+This is about **who writes the prompts**, not about an agent answering them.
+Nothing here lets Claude Code or Codex ask *you* something mid-task — an agent's
+shell has no terminal, so it cannot draw a prompt at all.
 
-> Add a tiny wizard to `deploy.sh`: environment, version, and a confirm before
-> deploying. Check it with `tiny -defaults`.
+Ask an agent for interactive prompts in bash and it writes them blind:
 
-An agent can finish that without ever answering a single prompt, because the
-questions are a **file** it writes and verifies, not code that has to be run to
-be read. `tiny -defaults` resolves the whole thing with no terminal, which is
-exactly what an agent's shell has.
+```sh
+read -p "Environment: " env      # the agent cannot run this to check it —
+                                 # there is no terminal in its shell
+```
 
-This was tested rather than assumed: an agent was given these docs, forbidden
-from reading any of the source, and asked to build a release gate. It worked on
-the first run — and the three things it could not find in the docs are fixed.
+It has no way to try them, so you are the one who finds out at the prompt that a
+default is missing or a validation rejects a valid answer.
 
-Hand it **[AGENT-GUIDE.md](AGENT-GUIDE.md)**: the one-paragraph contract, a
+Ask for the same thing with tiny and it can check its own work:
+
+```sh
+tiny -defaults deploy.yaml       # resolves every question, reads no input,
+                                 # fails loudly and names the broken step
+```
+
+The questions are a file, so writing them and proving they work are both things
+an agent can do with no terminal. That is the whole scope of it.
+
+It was tested rather than assumed: an agent was handed these docs, forbidden
+from reading any source, and asked to build a release gate for an imaginary
+project. It worked on the first run — and the three things it could not find in
+the docs have been fixed.
+
+Hand it **[AGENT-GUIDE.md](AGENT-GUIDE.md)**: the contract in one paragraph, a
 block to paste into `CLAUDE.md` or `AGENTS.md`, and the mistakes to avoid.
 
 ## What it costs
@@ -239,6 +292,8 @@ script, so the unattended path is still yours to write and keep in sync.
 - **[AGENT-GUIDE.md](AGENT-GUIDE.md)** — using it from a coding agent.
 - **[AGENTS.md](AGENTS.md)** — architecture and how to contribute.
 - `tiny -h` — every flag, in the terminal.
+
+Contributing: the check that has to pass before anything is merged is
 
 ```sh
 go build ./... && go vet ./... && go test ./... && gofmt -l .
