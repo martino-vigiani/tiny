@@ -13,6 +13,7 @@ package widgets
 
 import (
 	"context"
+	"slices"
 	"strings"
 
 	"github.com/martino-vigiani/tiny/internal/keys"
@@ -33,6 +34,7 @@ type picker struct {
 	marks  []bool
 	multi  bool
 	match  matchFunc
+	rank   bool
 	height int
 	title  string
 	hint   string
@@ -154,7 +156,9 @@ func (p *picker) visible(env *Env) int {
 }
 
 // refilter recomputes the visible options, keeping the cursor on the option it
-// was on when that option survives the filter.
+// was on when that option survives the filter. A fuzzy step also ranks them, so
+// the closest match is under the cursor rather than merely present somewhere in
+// the list — which is the whole point of fuzzy matching.
 func (p *picker) refilter() {
 	var was int = -1
 	if p.cursor >= 0 && p.cursor < len(p.shown) {
@@ -166,6 +170,9 @@ func (p *picker) refilter() {
 			p.shown = append(p.shown, i)
 		}
 	}
+	if p.rank && p.filter != "" {
+		p.sortByScore()
+	}
 	p.cursor = 0
 	if was >= 0 {
 		for i, idx := range p.shown {
@@ -175,6 +182,17 @@ func (p *picker) refilter() {
 			}
 		}
 	}
+}
+
+// sortByScore orders the visible options best-match first. It sorts the
+// existing []int in place with slices.SortFunc, so ranking costs no allocation
+// on a path that runs once per keystroke.
+func (p *picker) sortByScore() {
+	slices.SortStableFunc(p.shown, func(a, b int) int {
+		sa, _ := fuzzyScore(p.options[a], p.filter)
+		sb, _ := fuzzyScore(p.options[b], p.filter)
+		return sb - sa
+	})
 }
 
 func (p *picker) setFilter(f string) {
@@ -363,13 +381,32 @@ func matchPrefix(option, filter string) bool {
 	return strings.HasPrefix(strings.ToLower(option), strings.ToLower(filter))
 }
 
+// matcherFor resolves a step's `match:` to its comparison, falling back to the
+// widget's own default when the step does not say.
+func matcherFor(mode string, fallback matchFunc) matchFunc {
+	switch mode {
+	case spec.MatchSubstring:
+		return matchSubstring
+	case spec.MatchPrefix:
+		return matchPrefix
+	case spec.MatchFuzzy:
+		return fuzzyMatch
+	default:
+		return fallback
+	}
+}
+
 // newPicker builds the picker for a step, with the marks a multiselect default
 // preselects.
 func newPicker(s spec.Step, marks []bool, multi bool, match matchFunc, hint string) *picker {
 	if marks == nil {
 		marks = make([]bool, len(s.Options))
 	}
+	if s.Match != "" {
+		match = matcherFor(s.Match, match)
+	}
 	return &picker{
+		rank:    s.Match == spec.MatchFuzzy,
 		options: s.Options,
 		shown:   make([]int, 0, len(s.Options)),
 		marks:   marks,

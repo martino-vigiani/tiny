@@ -2,8 +2,8 @@ package widgets
 
 import (
 	"context"
+	"slices"
 	"strconv"
-	"strings"
 
 	"github.com/martino-vigiani/tiny/internal/spec"
 )
@@ -21,6 +21,7 @@ func (searchWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, error)
 	if env.rich() {
 		return richFilter(ctx, s, env, matchSubstring)
 	}
+	match := matcherFor(s.Match, matchSubstring)
 	PrintHeader(env, s.Prompt())
 	for {
 		if err := ctx.Err(); err != nil {
@@ -40,8 +41,14 @@ func (searchWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, error)
 			}
 			return "", nil
 		}
-		matches := filterSubstring(s.Options, query)
+		matches := filterMatching(s.Options, query, match, s.Match == spec.MatchFuzzy)
 		if len(matches) == 0 {
+			// With allow_custom the typed text is itself a valid answer, which
+			// is what makes a search step usable for values that are suggested
+			// rather than enumerated.
+			if s.AllowCustom && query != "" {
+				return query, nil
+			}
 			PrintError(env, "No matches, try again.")
 			continue
 		}
@@ -78,14 +85,25 @@ func (searchWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, error)
 	}
 }
 
-// filterSubstring returns the options containing query, case-insensitive.
-func filterSubstring(options []string, query string) []string {
-	q := strings.ToLower(query)
-	var out []string
+// filterMatching returns the options a filter accepts.
+//
+// A fuzzy step gets them ranked best-match first, exactly as the live prompt
+// ranks them. Without that the two ways of drawing the same step would present
+// the matches in different orders, and "the second one" would mean different
+// things — which is the presentation guarantee broken.
+func filterMatching(options []string, query string, match matchFunc, rank bool) []string {
+	out := make([]string, 0, len(options))
 	for _, opt := range options {
-		if strings.Contains(strings.ToLower(opt), q) {
+		if match(opt, query) {
 			out = append(out, opt)
 		}
+	}
+	if rank && query != "" {
+		slices.SortStableFunc(out, func(a, b string) int {
+			sa, _ := fuzzyScore(a, query)
+			sb, _ := fuzzyScore(b, query)
+			return sb - sa
+		})
 	}
 	return out
 }

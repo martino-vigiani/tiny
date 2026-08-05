@@ -29,6 +29,7 @@ const (
 	TypeEditor       StepType = "editor"
 	TypeAutocomplete StepType = "autocomplete"
 	TypeTable        StepType = "table"
+	TypeFile         StepType = "file"
 )
 
 // Wizard is the root of the tiny spec: a sequence of steps to run in order,
@@ -74,6 +75,28 @@ type Step struct {
 	// all"; a long list is otherwise unusable, since the question scrolls off
 	// the top of the terminal before it can be read.
 	Height int `yaml:"height,omitempty"`
+
+	// MinSelect and MaxSelect bound how many options a multiselect accepts.
+	// Zero means unbounded.
+	MinSelect int `yaml:"min_select,omitempty"`
+	MaxSelect int `yaml:"max_select,omitempty"`
+
+	// AllowCustom lets search and autocomplete return text that is not one of
+	// the options, instead of insisting on a match.
+	AllowCustom bool `yaml:"allow_custom,omitempty"`
+
+	// Match selects how a filter is compared against the options:
+	// "substring" (default), "prefix" or "fuzzy".
+	Match string `yaml:"match,omitempty"`
+
+	// Root, Dirs and Hidden configure the file step.
+	Root   string `yaml:"root,omitempty"`
+	Dirs   bool   `yaml:"dirs,omitempty"`
+	Hidden bool   `yaml:"hidden,omitempty"`
+
+	// ReturnColumn makes a selectable table answer with that column's value
+	// (1-based) instead of the row index.
+	ReturnColumn int `yaml:"return_column,omitempty"`
 
 	// Validation for the text steps. Pattern is an RE2 regexp; Message
 	// replaces the generated explanation when the answer is rejected.
@@ -155,6 +178,13 @@ func (s *Step) parseCondition(earlier map[string]bool) error {
 	return nil
 }
 
+// Match modes for the filtering steps.
+const (
+	MatchSubstring = "substring"
+	MatchPrefix    = "prefix"
+	MatchFuzzy     = "fuzzy"
+)
+
 var keyRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*$`)
 
 func (s Step) validate() error {
@@ -163,6 +193,12 @@ func (s Step) validate() error {
 	}
 	if s.Height < 0 {
 		return fmt.Errorf("step %q: height cannot be negative", s.Key)
+	}
+	switch s.Match {
+	case "", MatchSubstring, MatchPrefix, MatchFuzzy:
+	default:
+		return fmt.Errorf("step %q: match must be %q, %q or %q, got %q",
+			s.Key, MatchSubstring, MatchPrefix, MatchFuzzy, s.Match)
 	}
 	switch s.Type {
 	case TypeSelect, TypeMultiselect, TypeSearch, TypeAutocomplete:
@@ -185,6 +221,17 @@ func (s Step) validate() error {
 				return fmt.Errorf("step %q: default %q is not one of the options", s.Key, str)
 			}
 		case TypeMultiselect:
+			if s.MinSelect < 0 || s.MaxSelect < 0 {
+				return fmt.Errorf("step %q: selection bounds cannot be negative", s.Key)
+			}
+			if s.MaxSelect > 0 && s.MinSelect > s.MaxSelect {
+				return fmt.Errorf("step %q: min_select (%d) cannot exceed max_select (%d)",
+					s.Key, s.MinSelect, s.MaxSelect)
+			}
+			if s.MinSelect > len(s.Options) {
+				return fmt.Errorf("step %q: min_select (%d) exceeds the %d options",
+					s.Key, s.MinSelect, len(s.Options))
+			}
 			items, err := SplitMultiDefault(s.Default)
 			if err != nil {
 				return fmt.Errorf("step %q: %v", s.Key, err)
@@ -251,12 +298,35 @@ func (s Step) validate() error {
 		if s.Selectable && len(s.Rows) == 0 {
 			return fmt.Errorf("step %q: selectable table requires at least one row", s.Key)
 		}
+		if s.ReturnColumn < 0 {
+			return fmt.Errorf("step %q: return_column cannot be negative", s.Key)
+		}
+		if s.ReturnColumn > 0 {
+			if !s.Selectable {
+				return fmt.Errorf("step %q: return_column only applies to a selectable table", s.Key)
+			}
+			width := len(s.Headers)
+			for _, row := range s.Rows {
+				if len(row) > width {
+					width = len(row)
+				}
+			}
+			if s.ReturnColumn > width {
+				return fmt.Errorf("step %q: return_column %d exceeds the %d columns", s.Key, s.ReturnColumn, width)
+			}
+		}
 		if s.Default != nil {
 			if !s.Selectable {
 				return fmt.Errorf("step %q: default only valid when selectable", s.Key)
 			}
 			if err := validateTableDefault(s); err != nil {
 				return fmt.Errorf("step %q: %v", s.Key, err)
+			}
+		}
+	case TypeFile:
+		if s.Default != nil {
+			if _, ok := s.Default.(string); !ok {
+				return fmt.Errorf("step %q: default for file must be a path", s.Key)
 			}
 		}
 	case TypeInput, TypePassword, TypeEditor:

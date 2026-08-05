@@ -27,6 +27,12 @@ import (
 
 const version = "v0.3.0"
 
+// repeatable collects a flag given more than once, in the order it was given.
+type repeatable []string
+
+func (r *repeatable) String() string     { return strings.Join(*r, ", ") }
+func (r *repeatable) Set(v string) error { *r = append(*r, v); return nil }
+
 func main() {
 	os.Exit(run(os.Args[1:]))
 }
@@ -43,6 +49,9 @@ func run(args []string) int {
 	requireTTY := fs.Bool("require-tty", false, "fail instead of falling back to defaults when there is no terminal")
 	compact := fs.Bool("compact", false, "print the JSON payload on one line")
 	plain := fs.Bool("plain", false, "disable the interactive prompt; ask one line at a time")
+	var sets repeatable
+	fs.Var(&sets, "set", "pre-seed one answer as key=value (repeatable); other steps take their defaults")
+	answersFile := fs.String("answers", "", "pre-seed answers from a JSON or YAML file of key: value")
 	showVersion := fs.Bool("version", false, "print version and exit")
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage:\n  tiny [flags] <wizard.yaml>\n"+
@@ -122,6 +131,28 @@ func run(args []string) int {
 		return 1
 	}
 
+	// A preset file first, then -set on top, so the command line always wins
+	// over a checked-in answer file.
+	presets := runner.Preset{}
+	if *answersFile != "" {
+		loaded, loadErr := runner.LoadPresets(*answersFile)
+		if loadErr != nil {
+			fmt.Fprintf(os.Stderr, "tiny: %v\n", loadErr)
+			return 1
+		}
+		for k, v := range loaded {
+			presets[k] = v
+		}
+	}
+	fromFlags, setErr := runner.ParsePresets(sets)
+	if setErr != nil {
+		fmt.Fprintf(os.Stderr, "tiny: %v\n", setErr)
+		return 2
+	}
+	for k, v := range fromFlags {
+		presets[k] = v
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -137,7 +168,7 @@ func run(args []string) int {
 	// Falling back to defaults because nobody is there to answer is a normal
 	// mode, but a silent one: without this note a caller gets a well-formed
 	// payload of answers no human ever gave.
-	if !*useDefaults && !haveInput {
+	if !*useDefaults && len(presets) == 0 && !haveInput {
 		fmt.Fprintf(os.Stderr, "tiny: no terminal and no input — every step falls back to its default.\n")
 	}
 
@@ -154,9 +185,12 @@ func run(args []string) int {
 	defer keys.RestoreAll()
 
 	var answers map[string]any
-	if *useDefaults {
+	switch {
+	case len(presets) > 0:
+		answers, err = r.RunPresets(wiz, presets)
+	case *useDefaults:
 		answers, err = r.RunDefaults(wiz)
-	} else {
+	default:
 		answers, err = r.Run(ctx, wiz)
 	}
 	if flushErr := ui.Flush(); flushErr != nil && err == nil {

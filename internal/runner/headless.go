@@ -61,6 +61,18 @@ func defaultForStep(s spec.Step) (any, error) {
 		}
 		return spec.ParseConfirmDefault(s.Default)
 
+	case spec.TypeFile:
+		// A file step has nothing to browse without a person, so headless it is
+		// exactly its default — the same value the interactive path returns
+		// when the listing is abandoned.
+		if def, ok := s.Default.(string); ok {
+			return def, nil
+		}
+		if s.Required {
+			return nil, fmt.Errorf("required step has no default")
+		}
+		return "", nil
+
 	case spec.TypeInput, spec.TypePassword, spec.TypeEditor:
 		if s.Default == nil {
 			if s.Required {
@@ -132,6 +144,14 @@ func defaultForStep(s spec.Step) (any, error) {
 		idx, err := tableIndex(s)
 		if err != nil {
 			return nil, err
+		}
+		// return_column changes what a chosen row answers with, so headless has
+		// to apply it too or the two paths would disagree about the same row.
+		if s.ReturnColumn > 0 {
+			if cells := s.Rows[idx]; s.ReturnColumn <= len(cells) {
+				return cells[s.ReturnColumn-1], nil
+			}
+			return "", nil
 		}
 		return idx, nil
 

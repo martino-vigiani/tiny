@@ -2,6 +2,7 @@ package widgets
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -92,6 +93,10 @@ func (multiselectWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, e
 				selected[i] = true
 			}
 		}
+		if problem := checkSelectionCount(s, selected); problem != "" {
+			PrintError(env, problem)
+			continue
+		}
 		return spec.OptionsFor(selected, s.Options), nil
 	}
 }
@@ -115,5 +120,38 @@ func richMultiselect(ctx context.Context, s spec.Step, env *Env, marks []bool) (
 	for _, i := range chosen {
 		picked[i] = true
 	}
+	if problem := checkSelectionCount(s, picked); problem != "" {
+		PrintError(env, problem)
+		return richMultiselect(ctx, s, env, picked)
+	}
 	return spec.OptionsFor(picked, s.Options), nil
+}
+
+// checkSelectionCount reports why a selection is unacceptable, or "" when it
+// passes. Bounds are checked at the moment of answering rather than while
+// toggling: forbidding a keystroke that would exceed the maximum leaves the
+// user unable to swap one choice for another.
+func checkSelectionCount(s spec.Step, marks []bool) string {
+	n := 0
+	for _, m := range marks {
+		if m {
+			n++
+		}
+	}
+	switch {
+	case s.MinSelect > 0 && n < s.MinSelect:
+		return plural("Choose at least %d option%s.", s.MinSelect)
+	case s.MaxSelect > 0 && n > s.MaxSelect:
+		return plural("Choose at most %d option%s.", s.MaxSelect)
+	default:
+		return ""
+	}
+}
+
+func plural(format string, n int) string {
+	suffix := "s"
+	if n == 1 {
+		suffix = ""
+	}
+	return fmt.Sprintf(format, n, suffix)
 }

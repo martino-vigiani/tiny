@@ -53,7 +53,7 @@ func (tableWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, error) 
 				PrintErrorf(env, "%v", err)
 				continue
 			}
-			return idx, nil
+			return tableAnswer(s, idx), nil
 		}
 		n, err := strconv.Atoi(line)
 		if err != nil || n < 1 || n > len(s.Rows) {
@@ -66,7 +66,7 @@ func (tableWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, error) 
 			PrintErrorf(env, "Invalid row number, choose 1-%d.", len(s.Rows))
 			continue
 		}
-		return n - 1, nil
+		return tableAnswer(s, n-1), nil
 	}
 }
 
@@ -161,4 +161,23 @@ func tableDefaultIndex(s spec.Step) (int, error) {
 	default:
 		return 0, fmt.Errorf("Invalid default for selectable table.")
 	}
+}
+
+// tableAnswer converts a chosen row into the step's answer: the row index by
+// default, or that row's value in return_column when one is configured. The
+// index is the honest default — a table's columns are presentation — but a
+// caller who only wants the id should not have to index back into the rows it
+// already wrote.
+func tableAnswer(s spec.Step, row int) any {
+	if s.ReturnColumn <= 0 {
+		return row
+	}
+	if row < 0 || row >= len(s.Rows) {
+		return row
+	}
+	cells := s.Rows[row]
+	if s.ReturnColumn > len(cells) {
+		return ""
+	}
+	return cells[s.ReturnColumn-1]
 }

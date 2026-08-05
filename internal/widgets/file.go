@@ -1,0 +1,157 @@
+package widgets
+
+// The file step: pick a path from the filesystem.
+//
+// It is the one kind of interaction gum has that tiny had no answer for. The
+// implementation is deliberately a list of entries rather than a browser: the
+// picker already knows how to show a list, filter it and return a choice, so a
+// file step is that list plus directory traversal.
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+
+	"github.com/martino-vigiani/tiny/internal/spec"
+)
+
+func init() {
+	Register(spec.TypeFile, fileWidget{})
+}
+
+type fileWidget struct{}
+
+// dirSuffix marks a directory in the listing, so choosing one is visibly
+// different from choosing a file even before you press enter.
+const dirSuffix = "/"
+
+// parentEntry is how the listing offers a way back up.
+const parentEntry = "../"
+
+func (fileWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	dir, err := startDir(s)
+	if err != nil {
+		return nil, err
+	}
+
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		entries, err := listDir(dir, s)
+		if err != nil {
+			return nil, err
+		}
+
+		// The step is rewritten as an ordinary option list, so both the live
+		// picker and the line-based path render it with no special handling.
+		listing := s
+		listing.Options = entries
+		listing.Default = nil
+		listing.Title = s.Prompt() + " — " + dir
+
+		choice, err := chooseEntry(ctx, listing, env)
+		if err != nil {
+			return nil, err
+		}
+		if choice == "" {
+			// Nothing chosen: fall back the way every other widget does.
+			if def, ok := s.Default.(string); ok && def != "" {
+				return def, nil
+			}
+			if s.Required {
+				return nil, unexpectedEOF(s.Key)
+			}
+			return "", nil
+		}
+
+		switch {
+		case choice == parentEntry:
+			dir = filepath.Dir(dir)
+		case strings.HasSuffix(choice, dirSuffix):
+			child := filepath.Join(dir, strings.TrimSuffix(choice, dirSuffix))
+			// A step configured to pick directories answers with the directory
+			// rather than descending into it; there would otherwise be no way
+			// to choose one.
+			if s.Dirs {
+				return child, nil
+			}
+			dir = child
+		default:
+			return filepath.Join(dir, choice), nil
+		}
+	}
+}
+
+// chooseEntry runs one directory listing through the ordinary select machinery.
+func chooseEntry(ctx context.Context, listing spec.Step, env *Env) (string, error) {
+	listing.Type = spec.TypeSelect
+	value, err := RunStep(ctx, listing, env)
+	if err != nil {
+		return "", err
+	}
+	choice, _ := value.(string)
+	return choice, nil
+}
+
+// startDir resolves where the listing begins: the step's root, or the working
+// directory. A default path starts the listing in the directory holding it, so
+// a step suggesting a file opens where that file lives.
+func startDir(s spec.Step) (string, error) {
+	root := s.Root
+	if root == "" {
+		if def, ok := s.Default.(string); ok && def != "" {
+			root = filepath.Dir(def)
+		}
+	}
+	if root == "" {
+		root = "."
+	}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		return "", err
+	}
+	return abs, nil
+}
+
+// listDir returns the entries to offer, directories first and each sorted by
+// name — the order a person expects, and stable across filesystems, which the
+// order os.ReadDir happens to return is not.
+func listDir(dir string, s spec.Step) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	dirs := make([]string, 0, len(entries))
+	files := make([]string, 0, len(entries))
+	for _, e := range entries {
+		name := e.Name()
+		if !s.Hidden && strings.HasPrefix(name, ".") {
+			continue
+		}
+		if e.IsDir() {
+			dirs = append(dirs, name+dirSuffix)
+			continue
+		}
+		// A step picking directories still shows files as context would be
+		// misleading: it would offer choices it cannot answer with.
+		if !s.Dirs {
+			files = append(files, name)
+		}
+	}
+	sort.Strings(dirs)
+	sort.Strings(files)
+
+	out := make([]string, 0, len(dirs)+len(files)+1)
+	if dir != string(filepath.Separator) {
+		out = append(out, parentEntry)
+	}
+	out = append(out, dirs...)
+	out = append(out, files...)
+	return out, nil
+}

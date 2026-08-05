@@ -21,6 +21,7 @@ func (autocompleteWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, 
 	if env.rich() {
 		return richFilter(ctx, s, env, matchPrefix)
 	}
+	match := matcherFor(s.Match, matchPrefix)
 	PrintHeader(env, s.Prompt())
 	if s.Placeholder != "" {
 		PrintNotef(env, "Hint: %s", s.Placeholder)
@@ -49,11 +50,14 @@ func (autocompleteWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, 
 			}
 			continue
 		}
-		matches := filterPrefix(s.Options, text)
+		matches := filterMatching(s.Options, text, match, s.Match == spec.MatchFuzzy)
 		switch {
 		case len(matches) == 1:
 			return matches[0], nil
 		case len(matches) == 0:
+			if s.AllowCustom {
+				return text, nil
+			}
 			PrintError(env, "No matches, try again.")
 			continue
 		}
@@ -90,18 +94,6 @@ func (autocompleteWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, 
 			PrintErrorf(env, "Invalid choice, pick a number between 1 and %d.", len(matches))
 		}
 	}
-}
-
-// filterPrefix returns the options starting with prefix, case-insensitive.
-func filterPrefix(options []string, prefix string) []string {
-	p := strings.ToLower(prefix)
-	var out []string
-	for _, opt := range options {
-		if strings.HasPrefix(strings.ToLower(opt), p) {
-			out = append(out, opt)
-		}
-	}
-	return out
 }
 
 // autocompleteDefault resolves the default to its canonical option.
