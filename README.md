@@ -35,9 +35,13 @@ $ tiny wizard.yaml | jq
 
 ## Why it exists
 
-Every CLI reinvents the same question loop, and no agent can ask one at all.
-`tiny` makes an interaction a **file** instead of code — so it can be
-generated, reviewed, diffed, versioned, replayed, and run without a human.
+Every internal script has the same block of `read -p` at the top — and a
+`--yes` flag that duplicates every one of its defaults a second time.
+
+`tiny` replaces both with one file: a human answers the questions, the pipeline
+runs the same file with `-defaults`, and both get the same JSON. An interaction
+becomes a **file** instead of code, so it can be generated, reviewed, diffed,
+versioned and verified before anyone runs it.
 
 Three properties do the work:
 
@@ -50,6 +54,29 @@ headless in CI with `-defaults`, returning the same shape of answers.
 
 **Anyone can restyle it, nobody can restyle the output.** Themes control
 symbols and colors — never the questions or the JSON.
+
+## Interactive
+
+On a real terminal, `select`, `multiselect`, `search` and `autocomplete` draw a
+live prompt: arrow keys move the cursor, typing filters the list as you go,
+space toggles, and the frame redraws in place.
+
+```
+Framework
+❯ ▏ · type to filter
+❯ SwiftUI
+  UIKit
+  AppKit
+```
+
+Anywhere else — a pipe, CI, an agent's shell — the same wizard falls back to a
+numbered list, and `TestRichAnswersMatchLineMode` requires both ways of choosing
+to return the same value. Looks cannot change answers.
+
+It costs 5.9 ns and no allocation to decode a keystroke, one `write(2)` per
+frame, and nothing at all between keystrokes: there is no render loop, no
+polling and no goroutine — the process is simply blocked reading. Pass `-plain`
+(or set `TINY_PLAIN`) to ask one line at a time instead.
 
 ## Install
 
@@ -68,6 +95,7 @@ No runtime dependencies, no config file, nothing to install alongside it.
 ## Use it
 
 ```sh
+tiny select framework SwiftUI UIKit   # the whole wizard as arguments
 tiny wizard.yaml                      # interactive; JSON on stdout
 tiny - <<'YAML'                       # spec from stdin, no temp file
 steps: [{type: input, key: name, title: "Name"}]
@@ -89,6 +117,8 @@ printf '2\nn\n' | tiny wizard.yaml    # piped, no TTY needed
 | `-no-color` | Disable ANSI colors (same as `NO_COLOR`). |
 | `-list-themes` | Print the built-in presets. |
 | `-require-tty` | Fail (exit 3) instead of silently taking every default when there is no terminal. |
+| `-compact` | Print the JSON payload on one line. |
+| `-plain` | Ask one line at a time instead of drawing a live prompt. |
 | `-version`, `-h` | Version, usage. |
 
 Environment: `TINY_THEME` (preset name or path), `NO_COLOR`.
@@ -124,6 +154,28 @@ the same either way. `editor` collects multi-line text directly when no
 `$EDITOR` is available — finish with a line containing only `.`
 
 Full schema and per-type reference: **[SPEC.md](SPEC.md)**.
+
+## The whole wizard as arguments
+
+For a question that is not worth a file, write it as plain words:
+
+```sh
+tiny select framework SwiftUI UIKit AppKit
+tiny select framework SwiftUI UIKit + input name MyApp + confirm git yes
+tiny number port 8080 --min 1 --max 65535
+```
+
+The title is derived from the key (`db_host` becomes "Db host") and a
+single-choice step defaults to its first option, so a short wizard is
+headless-safe without saying so. Measured against gum, input plus output: 12
+tokens against 16 for one question, 32 against 46 for three, 74 against 111 for
+six — the shape is bare words rather than punctuation precisely because
+tokenizers charge for `,` `:` `=` and not for spaces.
+
+It is sugar: the same `Validate`, the same execution path, and a test requires
+each short form and the YAML it stands for to parse to identical wizards.
+`table` is the one type left out — its rows are two-dimensional, and YAML says
+that better.
 
 ## Conditional steps
 
@@ -205,6 +257,22 @@ from the answers — and runs headless with `--ci`.
 ```sh
 ./examples/scaffold.sh          # interactive
 ./examples/scaffold.sh --ci     # unattended
+```
+
+## What a spec cannot do
+
+A tiny spec is **inert**. It cannot run a command, read a file, or reach the
+network — there is no `exec:` and there will not be one. You can receive one by
+email, generate one from an untrusted issue, or `curl | tiny -` it, and the
+worst it can do is ask you a question.
+
+That is a deliberate refusal, not a missing feature. The moment a spec can run
+something, every one of those becomes remote code execution, and a coding agent
+reading a poisoned issue becomes the delivery mechanism. To fill a list from
+live data, let the caller produce it — they already have the permissions:
+
+```sh
+tiny select branch $(git branch --format='%(refname:short)')
 ```
 
 ## Contributing

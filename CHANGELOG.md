@@ -1,5 +1,42 @@
 # Changelog
 
+## v0.3.0
+
+### Added
+
+- **Live interactive prompts.** On a real terminal `select`, `multiselect`,
+  `search` and `autocomplete` draw a redrawing frame: arrows move a cursor,
+  typing filters, space toggles. Built directly on the terminal — no TUI
+  framework, no new dependency. 5.9 ns and zero allocations per keystroke, one
+  write per frame, and no CPU at all between keystrokes. `-plain` / `TINY_PLAIN`
+  opts out; a pipe or CI never enters it. `TestRichAnswersMatchLineMode` pins
+  that both ways of choosing return the same value.
+- **A wizard as arguments**: `tiny select framework SwiftUI UIKit + confirm git
+  yes`. Fewer tokens than gum from the first question. Sugar over the same
+  parser, pinned by an equivalence test against the YAML it stands for.
+- **Conditional steps** (`when:`) with six forms. A skipped step contributes no
+  key, skipping is transitive, and a forward reference is a load error.
+- **Declarative validation**: `pattern`, `min_length`, `max_length`, `message` —
+  and the step's default is checked against its own rule when the spec loads.
+- **`${key}` interpolation** of earlier answers into titles, defaults, options.
+- `tiny -` reads the spec from stdin; `-compact`, `-require-tty`, `-plain`,
+  `height:` on option lists, multi-line `editor` entry without `$EDITOR`.
+
+### Fixed
+
+- Where there is no terminal, every step took its default **silently**, handing
+  the caller a well-formed payload of answers nobody gave. tiny now says so, and
+  `-require-tty` makes it a hard failure (exit 3).
+- The `editor` step read a single line without `$EDITOR`, making multi-line text
+  impossible in the step that exists for it.
+
+### Performance
+
+- The JSON encoder is hand-written; `encoding/json` is gone from the binary
+  (-152 KB), pinned byte-for-byte by a fuzzed parity test against it.
+- Case-insensitive matching scans with `EqualFold` instead of lowercasing:
+  `select` 25 → 2 allocs/op, `multiselect` 55 → 5 with a default.
+
 ## v0.2.0
 
 The release that makes tiny embeddable: the payload is finally separable from

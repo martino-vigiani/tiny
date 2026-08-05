@@ -52,6 +52,13 @@ symbols:
   hint_open: "("          # wraps inline hints, e.g. the "[default]" marker
   hint_close: ")"
   table_rule: "─"         # repeated under a table's header row
+  # Interactive mode only:
+  cursor: "❯ "            # marks the row under the cursor
+  cursor_blank: "  "      # keeps the other rows aligned with it
+  checked: "◉ "           # a selected option in a multiselect
+  unchecked: "◯ "
+  caret: "▏"              # drawn at the end of the filter line
+  ellipsis: "…"           # marks a line clipped to the terminal width
 
 styles:
   header: "bold"
@@ -63,6 +70,9 @@ styles:
   error: "bold red"
   note: "dim"
   table_header: "bold underline"
+  cursor: "bold"          # the row under the cursor
+  selected: "green"       # the checked/unchecked marks
+  filter: ""              # the text typed into the filter
 ```
 
 Setting a symbol to `""` removes it. That is how you strip decoration:
@@ -161,6 +171,30 @@ including ones generated on the fly by an agent — picks it up automatically.
 export TINY_THEME="$PWD/themes/brand.yaml"
 answers="$(tiny /tmp/generated-wizard.yaml)"   # drawn in your brand
 ```
+
+## The interactive prompt
+
+On a real terminal the list steps draw a live, redrawing prompt, and six of the
+symbols above exist only for it:
+
+```
+Framework
+❯ ▏ · type to filter        <- prompt + filter + caret
+❯ SwiftUI                    <- cursor + option
+  UIKit                      <- cursor_blank + option
+```
+
+A multiselect adds `checked` / `unchecked` between the cursor and the option.
+Every one of these is themable, and none of them can change an answer.
+
+Keep `ellipsis` short: it is what a line clipped to the terminal width ends
+with, and clipping is what stops a long option from wrapping and corrupting the
+redraw.
+
+`-plain` (or `TINY_PLAIN`) turns the live prompt off without touching colors —
+it is orthogonal to `-theme plain`, which changes the look and not the
+behaviour. `NO_COLOR` likewise disables colors only; that convention is about
+color, not interactivity.
 
 ## Two rules worth knowing
 

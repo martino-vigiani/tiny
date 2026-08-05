@@ -33,9 +33,11 @@ internal/spec/          Single source of truth for the schema and validation:
 internal/theme/         The look: Theme (declarative YAML form), the built-in presets,
                         Merge/Expand for layering, and Resolve, which compiles a theme
                         into the exact strings widgets print.
+internal/keys/          Keystroke decoding and raw-mode ownership. A leaf, like
+                        theme: stdlib plus x/term, nothing from the rest of tiny.
 internal/widgets/       Widget contract (registry + Register/RegisterTest) plus the 12
-                        widgets (one file each), the themed render helpers and shared
-                        I/O helpers.
+                        widgets (one file each), the themed render helpers, the live
+                        picker (pick.go) and its frame accounting (frame.go).
 internal/runner/        Execution: runner.go (Run + JSON/YAML/env serializers),
                         headless.go (RunDefaults + defaultForStep).
 ```
@@ -43,6 +45,26 @@ internal/runner/        Execution: runner.go (Run + JSON/YAML/env serializers),
 Layering: `cmd/tiny` → `runner` → `widgets` + `spec` → `theme`. `widgets` depend on `spec`
 and `theme` but never on `runner`; `spec` depends only on `theme` (for the inline `theme:`
 block); `theme` is a leaf with no imports from the rest of the project.
+
+## The three interactive rules
+
+1. **`Env.Rich` is false by default.** Every path that does not explicitly ask
+   for the live prompt — a pipe, CI, an agent's shell, every existing test —
+   takes the line-based code unchanged. That default is what keeps
+   `TestDefaultsInteractiveParity` meaningful.
+2. **A frame's line count must match the newlines it emitted.** `frame.drawn` is
+   how far the next frame winds the cursor back; count it wrong by one and every
+   later frame overwrites the wrong part of the screen. Themed fragments carry
+   their own newlines (the default header opens with a blank line), so count
+   them rather than assuming. Every line is clipped to the terminal width for
+   the same reason: a wrapped line silently occupies two rows.
+3. **Raw mode must be restored on every exit path.** `term.MakeRaw` disables the
+   terminal's own signal handling, so a terminal left raw is a shell the user
+   has to repair by hand. `keys.Session.Close` is idempotent and `keys.RestoreAll`
+   is wired to both the signal context and a final defer in main.
+
+Testing an interactive widget: set `Env.Keys` to a `keys.Script`. That both
+drives the widget and suppresses raw mode, so no test ever touches a terminal.
 
 ## The two stream rules
 

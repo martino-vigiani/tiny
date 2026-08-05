@@ -39,6 +39,15 @@ tiny wizard.yaml | jq .framework
 Never parse the prompts. Their wording and decoration are themable (see *Theme* below) and
 are not part of this specification; only the payload is.
 
+### The presentation guarantee
+
+> **How a wizard is drawn never changes what it answers.**
+
+On a terminal the list steps draw a live prompt — arrow keys, type-to-filter,
+space to toggle; anywhere else the same steps print a numbered list. Both return
+the same Go type and the same value for the same choice, which
+`TestRichAnswersMatchLineMode` enforces. The same is true of themes:
+
 ### The theme guarantee
 
 > **A theme changes how a wizard looks, never what it answers.**
@@ -455,6 +464,8 @@ step falls back to its default, exactly as under `-defaults`.
 | `-no-color`   | Disable ANSI colors (same as `NO_COLOR`).                      |
 | `-list-themes`| Print the built-in presets, one per line, and exit.            |
 | `-require-tty`| Exit 3 instead of resolving every step to its default when there is no terminal. |
+| `-compact`    | Print the JSON payload on one line.                            |
+| `-plain`      | Ask one line at a time instead of drawing a live prompt.        |
 | `-version`    | Print `tiny v0.3.0` and exit.                                  |
 | `-h`          | Print usage and exit.                                          |
 
@@ -463,6 +474,7 @@ Environment variables:
 | Variable      | Meaning                                                        |
 |---------------|----------------------------------------------------------------|
 | `TINY_THEME`  | Theme preset name or path, overridden by `-theme`.             |
+| `TINY_PLAIN`  | Any non-empty value disables the live interactive prompt.      |
 | `NO_COLOR`    | Any non-empty value disables colors.                           |
 
 ### Exit codes
@@ -563,6 +575,38 @@ env_REGION=eu-west-1
 
 Prefer `-format json` piped through `jq` when values can be arbitrary; `env` is a
 convenience, JSON is the interchange format.
+
+---
+
+## The short form
+
+A wizard can be written as argv words instead of a file:
+
+```sh
+tiny select framework SwiftUI UIKit AppKit
+tiny select framework SwiftUI UIKit + input name MyApp + confirm git yes
+tiny number port 8080 --min 1 --max 65535
+```
+
+- The first argument naming a step type switches tiny into this mode; anything
+  else is a path (a file called `select` is reachable as `./select`).
+- Steps are separated by a bare `+`.
+- Bare words after the key are the `options` for a list step, or the `default`
+  for the others; `keyvalue` takes `k=v` words.
+- Attributes use the YAML field names: `--title`, `--prompt`, `--default`,
+  `--required`, `--placeholder`, `--min`, `--max`, `--increment`, `--format`,
+  `--editor`, `--height`, `--when`, `--pattern`, `--message`, `--min-length`,
+  `--max-length`.
+- The title is derived from the key when none is given (`db_host` → "Db host").
+- A `select`, `search` or `autocomplete` with no explicit default takes its
+  first option, so a short wizard is always resolvable headless. This is the one
+  place the short form is not a literal transcription of the minimal YAML.
+- A value that must start with `--` or be `+` is escaped: `\--foo`, `\+`.
+- `table` is not expressible: its rows are two-dimensional. Write YAML.
+
+The short form is sugar over the same parser and the same validation, and
+`TestShortFormEquivalence` requires each short form and its YAML to produce
+structurally identical wizards.
 
 ---
 

@@ -34,6 +34,15 @@ symbols:
   # Repeated to draw the separator under a table's header row.
   table_rule: "─"
 
+  # The live interactive prompt: the row cursor, the multiselect marks, the
+  # caret after the filter, and the mark for a line clipped to the width.
+  cursor: "▸ "
+  cursor_blank: "  "
+  checked: "[x] "
+  unchecked: "[ ] "
+  caret: "▏"
+  ellipsis: "…"
+
 styles:
   header: "bold"
   prompt: "cyan"
@@ -44,3 +53,6 @@ styles:
   error: "bold red"
   note: "dim"
   table_header: "bold underline"
+  cursor: "bold"
+  selected: "green"
+  filter: ""
