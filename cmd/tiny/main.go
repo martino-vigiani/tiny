@@ -16,6 +16,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"golang.org/x/term"
 
@@ -53,6 +54,7 @@ func run(args []string) int {
 	var sets repeatable
 	fs.Var(&sets, "set", "pre-seed one answer as key=value (repeatable); other steps take their defaults")
 	answersFile := fs.String("answers", "", "pre-seed answers from a JSON or YAML file of key: value")
+	withMeta := fs.Bool("meta", false, "add a _meta block recording what produced the answers")
 	showVersion := fs.Bool("version", false, "print version and exit")
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage:\n  tiny [flags] <wizard.yaml>\n"+
@@ -105,19 +107,28 @@ func run(args []string) int {
 	// included — arrives untouched in fs.Args().
 	var wiz *spec.Wizard
 	var err error
-	if fs.Arg(0) == demoArg && fs.NArg() == 1 {
+	// source and specBytes are what -meta records: where the wizard came from,
+	// and the bytes it was, so two payloads can be told apart by their spec
+	// rather than by whoever remembers which file was current.
+	source := fs.Arg(0)
+	var specBytes []byte
+	switch {
+	case fs.Arg(0) == demoArg && fs.NArg() == 1:
+		specBytes = demoSpec
 		wiz, err = loadDemo()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "tiny: the built-in demo is broken: %v\n", err)
 			return 1
 		}
-	} else if spec.IsShortType(fs.Arg(0)) {
+	case spec.IsShortType(fs.Arg(0)):
+		source = "argv"
+		specBytes = []byte(strings.Join(fs.Args(), " "))
 		wiz, err = spec.ParseShort(fs.Args())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "tiny: %v\n", err)
 			return 2
 		}
-	} else {
+	default:
 		if fs.NArg() != 1 {
 			fs.Usage()
 			return 2
@@ -127,6 +138,7 @@ func run(args []string) int {
 			fmt.Fprintf(os.Stderr, "tiny: %v\n", readErr)
 			return 1
 		}
+		specBytes = data
 		wiz, err = spec.Parse(data)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "tiny: invalid wizard: %v\n", err)
@@ -205,10 +217,14 @@ func run(args []string) int {
 	defer keys.RestoreAll()
 
 	var answers map[string]any
+	started := time.Now()
+	mode := runner.ModeInteractive
 	switch {
 	case len(presets) > 0:
+		mode = runner.ModePreset
 		answers, err = r.RunPresets(wiz, presets)
 	case *useDefaults:
+		mode = runner.ModeDefaults
 		answers, err = r.RunDefaults(wiz)
 	default:
 		answers, err = r.Run(ctx, wiz)
@@ -226,6 +242,18 @@ func run(args []string) int {
 		}
 		fmt.Fprintf(os.Stderr, "tiny: %v\n", err)
 		return 1
+	}
+
+	if *withMeta {
+		runner.Meta{
+			Version: version,
+			Source:  source,
+			Spec:    specBytes,
+			Mode:    mode,
+			TTY:     isTTY,
+			Started: started,
+			Ended:   time.Now(),
+		}.Attach(answers, wiz)
 	}
 
 	if err := writeAnswers(*output, *format, *compact, answers); err != nil {
