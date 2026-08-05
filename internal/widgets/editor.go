@@ -21,10 +21,15 @@ func (editorWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, error)
 		return nil, ctx.Err()
 	}
 	PrintHeader(env, s.Prompt())
-	editor := s.EditorCmd
-	if editor == "" {
-		editor = os.Getenv("VISUAL")
-	}
+	// The editor command comes from the ENVIRONMENT ONLY, never from the spec.
+	//
+	// A spec is meant to be inert: something you can be sent, or generate from
+	// an untrusted issue, and run without consequence. Honouring a spec's
+	// `editor:` field made that false — `editor: /usr/bin/env sh` with the
+	// step's own default as the script body is arbitrary code execution, and
+	// `editor: /bin/cp /etc/passwd` puts the file's contents in the payload.
+	// The field is still parsed, so old specs load, and deliberately ignored.
+	editor := os.Getenv("VISUAL")
 	if editor == "" {
 		editor = os.Getenv("EDITOR")
 	}
@@ -126,7 +131,10 @@ func runEditor(ctx context.Context, s spec.Step, editor string) (any, error) {
 	args := append(append([]string{}, fields[1:]...), path)
 	cmd := exec.CommandContext(ctx, fields[0], args...)
 	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
+	// The editor's own chatter goes to the UI stream, not to stdout. Some real
+	// editors print warnings on startup, and stdout carries the payload: one
+	// line from `code -w` or `emacsclient` would corrupt the JSON.
+	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return nil, err

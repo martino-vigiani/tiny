@@ -50,7 +50,14 @@ func defaultForStep(s spec.Step) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		return spec.OrderByOptions(items, s.Options), nil
+		chosen := spec.OrderByOptions(items, s.Options)
+		// The bounds apply here too. A preset resolves through this path, and
+		// enforcing them only at the prompt let `-set m=a,b,c` past a
+		// max_select of one — an answer the wizard itself would have refused.
+		if problem := spec.CheckSelectionCount(s, len(chosen)); problem != "" {
+			return nil, fmt.Errorf("%s", strings.ToLower(problem[:1])+problem[1:len(problem)-1])
+		}
+		return chosen, nil
 
 	case spec.TypeConfirm:
 		if s.Default == nil {

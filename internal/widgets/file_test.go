@@ -15,7 +15,13 @@ import (
 // fileTree builds a small directory to browse.
 func fileTree(t *testing.T) string {
 	t.Helper()
-	root := t.TempDir()
+	// Resolved, because the widget resolves symlinks to keep its containment
+	// check honest — on macOS /var is a link to /private/var, so an unresolved
+	// temp path would never equal what the widget answers.
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatalf("resolving the temp dir: %v", err)
+	}
 	for _, name := range []string{"alpha.txt", "beta.txt", ".hidden"} {
 		if err := os.WriteFile(filepath.Join(root, name), []byte("x"), 0o644); err != nil {
 			t.Fatalf("writing %s: %v", name, err)
@@ -37,9 +43,9 @@ func fileEnv(input string) (*Env, *bytes.Buffer) {
 
 func TestFilePicksAFile(t *testing.T) {
 	root := fileTree(t)
-	// Listing is "../", "sub/", "alpha.txt", "beta.txt" — directories first,
-	// each group sorted, so the third entry is alpha.txt.
-	env, _ := fileEnv("3\n")
+	// At the root there is no "../", so the listing is "sub/", "alpha.txt",
+	// "beta.txt" — directories first, each group sorted.
+	env, _ := fileEnv("2\n")
 	s := spec.Step{Type: spec.TypeFile, Key: "f", Title: "File", Root: root}
 	got, err := fileWidget{}.Run(context.Background(), s, env)
 	if err != nil {
@@ -54,7 +60,8 @@ func TestFilePicksAFile(t *testing.T) {
 // reachable without any special syntax.
 func TestFileDescendsIntoDirectories(t *testing.T) {
 	root := fileTree(t)
-	env, _ := fileEnv("2\n2\n")
+	// "sub/" is first, then inside it "../" and "inner.txt".
+	env, _ := fileEnv("1\n2\n")
 	s := spec.Step{Type: spec.TypeFile, Key: "f", Title: "File", Root: root}
 	got, err := fileWidget{}.Run(context.Background(), s, env)
 	if err != nil {
@@ -69,7 +76,7 @@ func TestFileDescendsIntoDirectories(t *testing.T) {
 // otherwise there would be no way to choose one at all.
 func TestFileDirsModeAnswersWithTheDirectory(t *testing.T) {
 	root := fileTree(t)
-	env, _ := fileEnv("2\n")
+	env, _ := fileEnv("1\n")
 	s := spec.Step{Type: spec.TypeFile, Key: "f", Title: "Dir", Root: root, Dirs: true}
 	got, err := fileWidget{}.Run(context.Background(), s, env)
 	if err != nil {
@@ -119,7 +126,7 @@ func TestFileEOFUsesDefault(t *testing.T) {
 // tiny's working directory was.
 func TestFileAnswersAbsolutePaths(t *testing.T) {
 	root := fileTree(t)
-	env, _ := fileEnv("3\n")
+	env, _ := fileEnv("2\n")
 	s := spec.Step{Type: spec.TypeFile, Key: "f", Title: "File", Root: root}
 	got, err := fileWidget{}.Run(context.Background(), s, env)
 	if err != nil {
@@ -131,5 +138,33 @@ func TestFileAnswersAbsolutePaths(t *testing.T) {
 	}
 	if _, err := os.Stat(path); err != nil {
 		t.Errorf("answer %q does not exist: %v", path, err)
+	}
+}
+
+// The listing is confined to where it started. Without that, a spec you were
+// sent could walk `../` to anywhere on the filesystem, and "a tiny spec cannot
+// read a file" would be false a second way.
+func TestFileCannotEscapeItsRoot(t *testing.T) {
+	root := fileTree(t)
+	s := spec.Step{Type: spec.TypeFile, Key: "f", Title: "File", Root: root}
+
+	// At the root there is nowhere above to go, so no "../" is offered.
+	env, out := fileEnv("\n")
+	if _, err := (fileWidget{}).Run(context.Background(), s, env); err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+	if strings.Contains(out.String(), "../") {
+		t.Errorf("the root listing offered a way out of itself:\n%s", out.String())
+	}
+
+	// One level down it is offered, and taking it returns to the root — which
+	// again has no way up.
+	env, out = fileEnv("1\n1\n\n")
+	if _, err := (fileWidget{}).Run(context.Background(), s, env); err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+	if strings.Count(out.String(), "../") != 1 {
+		t.Errorf("expected exactly one listing to offer ../ (the one below the root):\n%s",
+			out.String())
 	}
 }

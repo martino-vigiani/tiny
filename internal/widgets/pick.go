@@ -35,6 +35,7 @@ type picker struct {
 	multi  bool
 	match  matchFunc
 	rank   bool
+	custom bool
 	height int
 	title  string
 	hint   string
@@ -64,12 +65,16 @@ func runPicker(ctx context.Context, env *Env, p *picker) ([]int, error) {
 	defer cleanup()
 
 	p.refilter()
+	env.reset()
 	env.hideCursor()
 	defer env.showCursor()
 	defer func() {
 		// Leave the transcript on its own line, so the committed answer the
-		// caller prints next does not land inside the frame.
-		WriteUI(env, "\n")
+		// caller prints next does not land inside the frame — and forget this
+		// frame, or the next widget would wind back into it and eat the
+		// questions already answered.
+		WriteUI(env, "\r\n")
+		env.reset()
 	}()
 
 	for {
@@ -92,6 +97,14 @@ func runPicker(ctx context.Context, env *Env, p *picker) ([]int, error) {
 		case keys.CtrlD:
 			return nil, errAbandoned
 		case keys.Enter:
+			// With allow_custom the typed filter is itself an answer, so a
+			// filter matching nothing still commits. Without this the live
+			// prompt silently returned the default where the line-based path
+			// returned the typed text — the same spec answering differently
+			// depending on how it was drawn.
+			if len(p.shown) == 0 && p.custom && p.filter != "" {
+				return nil, errCustomAnswer
+			}
 			return p.commit(), nil
 		case keys.Up:
 			p.move(-1)
@@ -150,9 +163,21 @@ func (e *Env) keySource() (keys.Source, func(), error) {
 	return keys.NewDecoder(e.In), func() { _ = session.Close() }, nil
 }
 
+// visible is how many options the frame may draw.
+//
+// The chrome it has to leave room for is everything the frame emits besides the
+// options: the header, whose themed decoration carries its own newlines and by
+// default opens with a blank one; the filter line; the two "..." markers that
+// appear when the list is windowed; and the final line, which is not newline
+// terminated. Under-counting any of these makes the frame taller than the
+// screen, and once the terminal scrolls the redraw never recovers.
 func (p *picker) visible(env *Env) int {
-	// Chrome: the title line, the filter line and a spare line.
-	return env.visibleRows(p.height, 3)
+	t := env.look()
+	chrome := countNewlines(t.HeaderOpen) + countNewlines(t.HeaderClose) // header
+	chrome++                                                             // filter line
+	chrome += 2                                                          // the "..." markers, when windowed
+	chrome++                                                             // the frame's unterminated last line
+	return env.visibleRows(p.height, chrome)
 }
 
 // refilter recomputes the visible options, keeping the cursor on the option it
@@ -290,9 +315,9 @@ func (p *picker) draw(env *Env) {
 	// default one opens with a blank line — so the frame counts the newlines it
 	// actually emitted rather than assuming one. Getting this wrong by a single
 	// line makes every later frame overwrite the wrong part of the screen.
-	env.buf = append(env.buf, t.HeaderOpen...)
+	env.appendFramed(t.HeaderOpen)
 	env.appendClipped(p.title, 0)
-	env.buf = append(env.buf, t.HeaderClose...)
+	env.appendFramed(t.HeaderClose)
 	env.frame.rows += countNewlines(t.HeaderOpen) + countNewlines(t.HeaderClose)
 
 	// Filter line: the prompt marker, what has been typed, and the caret.
@@ -407,6 +432,7 @@ func newPicker(s spec.Step, marks []bool, multi bool, match matchFunc, hint stri
 	}
 	return &picker{
 		rank:    s.Match == spec.MatchFuzzy,
+		custom:  s.AllowCustom,
 		options: s.Options,
 		shown:   make([]int, 0, len(s.Options)),
 		marks:   marks,

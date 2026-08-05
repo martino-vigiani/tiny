@@ -39,11 +39,15 @@ func (fileWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, error) {
 		return nil, err
 	}
 
+	// The listing never rises above where it started. Without that, `../` walks
+	// a spec anywhere on the filesystem — a mailed spec could enumerate a home
+	// directory, and "a spec cannot read a file" would be false a second way.
+	root := dir
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		entries, err := listDir(dir, s)
+		entries, err := listDir(dir, root, s)
 		if err != nil {
 			return nil, err
 		}
@@ -72,9 +76,17 @@ func (fileWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, error) {
 
 		switch {
 		case choice == parentEntry:
-			dir = filepath.Dir(dir)
+			if parent := filepath.Dir(dir); within(parent, root) {
+				dir = parent
+			}
 		case strings.HasSuffix(choice, dirSuffix):
-			child := filepath.Join(dir, strings.TrimSuffix(choice, dirSuffix))
+			child := resolve(dir, strings.TrimSuffix(choice, dirSuffix))
+			if !within(child, root) {
+				// A symlink pointing outside: cleaning the path lexically would
+				// not have caught it.
+				PrintError(env, "That directory is outside the listing root.")
+				continue
+			}
 			// A step configured to pick directories answers with the directory
 			// rather than descending into it; there would otherwise be no way
 			// to choose one.
@@ -83,7 +95,12 @@ func (fileWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, error) {
 			}
 			dir = child
 		default:
-			return filepath.Join(dir, choice), nil
+			chosen := resolve(dir, choice)
+			if !within(chosen, root) {
+				PrintError(env, "That path is outside the listing root.")
+				continue
+			}
+			return chosen, nil
 		}
 	}
 }
@@ -116,13 +133,40 @@ func startDir(s spec.Step) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if real, err := filepath.EvalSymlinks(abs); err == nil {
+		return real, nil
+	}
 	return abs, nil
+}
+
+// resolve joins a listing entry to its directory and follows symlinks, so a
+// link out of the tree is visible to the containment check rather than hidden
+// by lexical cleaning.
+func resolve(dir, name string) string {
+	joined := filepath.Join(dir, name)
+	if real, err := filepath.EvalSymlinks(joined); err == nil {
+		return real
+	}
+	return joined
+}
+
+// within reports whether path is root or sits inside it.
+func within(path, root string) bool {
+	if path == root {
+		return true
+	}
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // listDir returns the entries to offer, directories first and each sorted by
 // name — the order a person expects, and stable across filesystems, which the
-// order os.ReadDir happens to return is not.
-func listDir(dir string, s spec.Step) ([]string, error) {
+// order os.ReadDir happens to return is not. `../` appears only below the root,
+// so the listing cannot walk out of where it started.
+func listDir(dir, root string, s spec.Step) ([]string, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
@@ -148,7 +192,7 @@ func listDir(dir string, s spec.Step) ([]string, error) {
 	sort.Strings(files)
 
 	out := make([]string, 0, len(dirs)+len(files)+1)
-	if dir != string(filepath.Separator) {
+	if dir != root {
 		out = append(out, parentEntry)
 	}
 	out = append(out, dirs...)

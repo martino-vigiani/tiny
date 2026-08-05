@@ -155,8 +155,20 @@ func run(args []string) int {
 		presets[k] = v
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
+	// Signals are handled by exiting, not merely by cancelling a context: the
+	// line-based widgets block in a read that never observes cancellation, so a
+	// context alone left tiny alive and still eating the user's keystrokes
+	// after Ctrl-C. SIGHUP is included because a closed pane or a dropped ssh
+	// session sends it, and the terminal it leaves behind outlives the process.
+	ctx := context.Background()
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+	go func() {
+		<-signals
+		keys.RestoreAll()
+		fmt.Fprintf(os.Stderr, "\ntiny: cancelled\n")
+		os.Exit(4)
+	}()
 
 	in, closeIn, haveInput := answerSource(*useTTY || fs.Arg(0) == "-")
 	defer closeIn()
@@ -181,9 +193,8 @@ func run(args []string) int {
 	r.SetRich(richCapable(isTTY, *plain))
 
 	// Raw mode disables the terminal's own signal handling, so a terminal left
-	// raw is a shell the user has to repair by hand. Restoration is wired to
-	// both the signal context and a final defer.
-	context.AfterFunc(ctx, keys.RestoreAll)
+	// raw is a shell the user has to repair by hand. The signal handler above
+	// restores it; this covers every ordinary exit path, panic included.
 	defer keys.RestoreAll()
 
 	var answers map[string]any

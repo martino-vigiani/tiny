@@ -143,6 +143,9 @@ func richFilter(ctx context.Context, s spec.Step, env *Env, match matchFunc) (an
 	}
 	chosen, err := runPicker(ctx, env, p)
 	if err != nil {
+		if err == errCustomAnswer {
+			return p.filter, nil
+		}
 		if err == errAbandoned {
 			if def != "" {
 				return def, nil

@@ -2,7 +2,6 @@ package widgets
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -138,20 +137,5 @@ func checkSelectionCount(s spec.Step, marks []bool) string {
 			n++
 		}
 	}
-	switch {
-	case s.MinSelect > 0 && n < s.MinSelect:
-		return plural("Choose at least %d option%s.", s.MinSelect)
-	case s.MaxSelect > 0 && n > s.MaxSelect:
-		return plural("Choose at most %d option%s.", s.MaxSelect)
-	default:
-		return ""
-	}
-}
-
-func plural(format string, n int) string {
-	suffix := "s"
-	if n == 1 {
-		suffix = ""
-	}
-	return fmt.Sprintf(format, n, suffix)
+	return spec.CheckSelectionCount(s, n)
 }

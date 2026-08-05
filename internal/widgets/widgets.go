@@ -60,6 +60,10 @@ type Env struct {
 // live prompt: the step is over, with whatever the default provides.
 var errAbandoned = errors.New("input closed")
 
+// errCustomAnswer signals that the live prompt committed the typed filter
+// rather than an option, which only an allow_custom step permits.
+var errCustomAnswer = errors.New("custom answer")
+
 // defaultTheme is the compiled fallback for an Env with no theme. It is built
 // once, on first use, and never mutated.
 var defaultTheme = sync.OnceValue(func() *theme.Resolved {
@@ -90,6 +94,10 @@ func (e *Env) emit() {
 		return
 	}
 	_, _ = e.Out.Write(e.buf)
+	// The UI stream is buffered, and a live prompt has no natural moment when
+	// the buffer fills: a frame must reach the terminal now or the user watches
+	// a blank screen until something else happens to flush it.
+	_ = flushOut(e)
 	if cap(e.buf) > maxRetainedBuf {
 		e.buf = nil
 		return
@@ -251,11 +259,32 @@ func unexpectedEOF(key string) error {
 	return fmt.Errorf("unexpected end of input for required step %q", key)
 }
 
+// appendText appends text from a spec — a title, an option, a hint — with the
+// control characters removed.
+//
+// A spec is data from an untrusted source: it can be mailed to you, generated
+// from an issue, or piped in with `curl`. Written verbatim, an option
+// containing an escape sequence could retitle the window, clear the screen,
+// write the clipboard (OSC 52) or forge a hyperlink. Theme escapes are appended
+// separately and are unaffected — the theme comes from the person running the
+// wizard, not from the spec.
+func (e *Env) appendText(text string) {
+	start := 0
+	for i := 0; i < len(text); i++ {
+		if c := text[i]; c >= 0x20 && c != 0x7f {
+			continue
+		}
+		e.buf = append(e.buf, text[start:i]...)
+		start = i + 1
+	}
+	e.buf = append(e.buf, text[start:]...)
+}
+
 // PrintHeader renders a step's section title through the theme.
 func PrintHeader(env *Env, title string) {
 	t := env.look()
 	env.buf = append(env.buf, t.HeaderOpen...)
-	env.buf = append(env.buf, title...)
+	env.appendText(title)
 	env.buf = append(env.buf, t.HeaderClose...)
 	env.emit()
 }
@@ -344,7 +373,7 @@ func printList(env *Env, items []string, from, to int, isMarked func(int) bool) 
 		env.buf = append(env.buf, t.IndexClose...)
 		env.buf = append(env.buf, ' ')
 		env.buf = append(env.buf, t.OptionOpen...)
-		env.buf = append(env.buf, item...)
+		env.appendText(item)
 		env.buf = append(env.buf, t.OptionClose...)
 		env.buf = append(env.buf, '\n')
 	}
@@ -381,7 +410,7 @@ func PrintPrompt(env *Env, extra string) {
 func PrintError(env *Env, msg string) {
 	t := env.look()
 	env.buf = append(env.buf, t.ErrorOpen...)
-	env.buf = append(env.buf, msg...)
+	env.appendText(msg)
 	env.buf = append(env.buf, t.ErrorClose...)
 	env.buf = append(env.buf, '\n')
 	env.emit()
@@ -397,7 +426,7 @@ func PrintErrorf(env *Env, format string, a ...any) {
 func PrintNote(env *Env, msg string) {
 	t := env.look()
 	env.buf = append(env.buf, t.NoteOpen...)
-	env.buf = append(env.buf, msg...)
+	env.appendText(msg)
 	env.buf = append(env.buf, t.NoteClose...)
 	env.buf = append(env.buf, '\n')
 	env.emit()

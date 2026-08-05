@@ -211,7 +211,6 @@ steps:
   - type: input
     key: module
     title: "Module path"
-    placeholder: "github.com/fleet/${service}"
     default: "github.com/fleet/${service}"
 
   # ── 19. editor ──

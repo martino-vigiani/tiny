@@ -1,0 +1,44 @@
+# slate — the quiet one. Grey type, one accent, no decoration.
+#
+#   tiny -theme themes/slate.yaml examples/showcase.yaml
+#
+# It exists next to themes/neon.yaml to make the point that the two are the
+# same wizard: same questions, same keys, same JSON, opposite mood.
+name: slate
+preset: minimal
+color: auto
+
+symbols:
+  header_prefix: "\n"
+  header_suffix: "\n"
+  prompt: "  "
+  indent: "  "
+  default_marker: "·"
+  item_marker: " "
+  bullet: "."
+  error_prefix: "  "
+  note_prefix: ""
+  hint_open: "("
+  hint_close: ")"
+  table_rule: "╌"
+
+  cursor: "│ "
+  cursor_blank: "  "
+  checked: "▪ "
+  unchecked: "▫ "
+  caret: "│"
+  ellipsis: "…"
+
+styles:
+  header: "bold #e6e6e6"
+  prompt: "#5a5a5a"
+  option: "#9a9a9a"
+  index: "#5a5a5a"
+  marker: "#8ab4d8"     # the one accent
+  hint: "#5a5a5a"
+  note: "#5a5a5a"
+  error: "#d88a8a"
+  table_header: "bold #e6e6e6"
+  cursor: "bold #ffffff"
+  selected: "#8ab4d8"
+  filter: "#e6e6e6"

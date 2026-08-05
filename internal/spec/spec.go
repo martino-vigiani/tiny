@@ -178,6 +178,32 @@ func (s *Step) parseCondition(earlier map[string]bool) error {
 	return nil
 }
 
+// CheckSelectionCount reports why a multiselect answer is unacceptable, or ""
+// when it passes.
+//
+// It lives here rather than in the widget because the bounds have to hold on
+// every path that can produce an answer — the prompt, and a pre-seeded run.
+// When only the widget enforced them, `-set m=a,b,c` smuggled three options
+// past a max_select of one.
+func CheckSelectionCount(s Step, chosen int) string {
+	switch {
+	case s.MinSelect > 0 && chosen < s.MinSelect:
+		return pluralOptions("Choose at least %d option%s.", s.MinSelect)
+	case s.MaxSelect > 0 && chosen > s.MaxSelect:
+		return pluralOptions("Choose at most %d option%s.", s.MaxSelect)
+	default:
+		return ""
+	}
+}
+
+func pluralOptions(format string, n int) string {
+	suffix := "s"
+	if n == 1 {
+		suffix = ""
+	}
+	return fmt.Sprintf(format, n, suffix)
+}
+
 // AllStepTypes returns every step type the schema defines. Validation and the
 // tests derive their lists from it, so a type added to the const block cannot
 // be quietly missed by one of them.
