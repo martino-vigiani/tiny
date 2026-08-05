@@ -24,7 +24,7 @@ import (
 	"github.com/martino-vigiani/tiny/internal/theme"
 )
 
-const version = "v0.2.0"
+const version = "v0.3.0"
 
 func main() {
 	os.Exit(run(os.Args[1:]))
@@ -39,6 +39,7 @@ func run(args []string) int {
 	noColor := fs.Bool("no-color", false, "disable ANSI colors (same as NO_COLOR=1)")
 	output := fs.String("o", "", "write the answers to this file instead of stdout")
 	listThemes := fs.Bool("list-themes", false, "print the built-in theme presets and exit")
+	requireTTY := fs.Bool("require-tty", false, "fail instead of falling back to defaults when there is no terminal")
 	showVersion := fs.Bool("version", false, "print version and exit")
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage:\n  tiny [flags] <wizard.yaml>\n  tiny [flags] -            read the spec from stdin (answers come from /dev/tty)\n\nFlags:\n")
@@ -99,12 +100,24 @@ func run(args []string) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	in, closeIn := answerSource(fs.Arg(0) == "-")
+	in, closeIn, haveInput := answerSource(fs.Arg(0) == "-")
 	defer closeIn()
+
+	isTTY := term.IsTerminal(int(in.Fd()))
+	if *requireTTY && !isTTY {
+		fmt.Fprintf(os.Stderr, "tiny: no terminal available — every step would fall back to its default.\n"+
+			"      Run this from a terminal, or pass -defaults to say so on purpose.\n")
+		return 3
+	}
+	// Falling back to defaults because nobody is there to answer is a normal
+	// mode, but a silent one: without this note a caller gets a well-formed
+	// payload of answers no human ever gave.
+	if !*useDefaults && !haveInput {
+		fmt.Fprintf(os.Stderr, "tiny: no terminal and no input — every step falls back to its default.\n")
+	}
 
 	// The UI goes to stderr; stdout carries only the answers.
 	ui := bufio.NewWriter(os.Stderr)
-	isTTY := term.IsTerminal(int(in.Fd()))
 	r := runner.New(in, ui, int(in.Fd()), isTTY)
 	r.SetTheme(resolved)
 
@@ -155,15 +168,18 @@ func readSpec(path string) ([]byte, error) {
 // so the answers have to come from the terminal directly: tiny opens /dev/tty.
 // Where there is no terminal — CI, a cron job — there is nothing to read and
 // every step falls back to its default, which is exactly what -defaults does.
-func answerSource(specOnStdin bool) (*os.File, func()) {
+// It also reports whether anything can actually be read: false means every step
+// will silently take its default, which the caller warns about.
+func answerSource(specOnStdin bool) (in *os.File, closeIn func(), haveInput bool) {
 	if !specOnStdin {
-		return os.Stdin, func() {}
+		return os.Stdin, func() {}, true
 	}
 	tty, err := os.Open("/dev/tty")
 	if err != nil {
-		return emptyInput()
+		f, closeF := emptyInput()
+		return f, closeF, false
 	}
-	return tty, func() { tty.Close() }
+	return tty, func() { tty.Close() }, true
 }
 
 // emptyInput returns a file that is already at EOF, so widgets apply their

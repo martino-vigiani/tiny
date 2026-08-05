@@ -70,6 +70,11 @@ type Step struct {
 	// if it holds. See condition.go for the expression language.
 	When string `yaml:"when,omitempty"`
 
+	// Height caps how many options are shown at once. Zero means "show them
+	// all"; a long list is otherwise unusable, since the question scrolls off
+	// the top of the terminal before it can be read.
+	Height int `yaml:"height,omitempty"`
+
 	// cond is When parsed, filled by Validate so every run reuses it.
 	cond *Condition
 }
@@ -143,6 +148,9 @@ var keyRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*$`)
 func (s Step) validate() error {
 	if !keyRe.MatchString(s.Key) {
 		return fmt.Errorf("step %q: invalid key %q (must match ^[A-Za-z0-9][A-Za-z0-9_.-]*$)", s.Key, s.Key)
+	}
+	if s.Height < 0 {
+		return fmt.Errorf("step %q: height cannot be negative", s.Key)
 	}
 	switch s.Type {
 	case TypeSelect, TypeMultiselect, TypeSearch, TypeAutocomplete:

@@ -28,7 +28,7 @@ func (selectWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, error)
 			}
 		}
 	}
-	PrintList(env, s.Options, defIdx)
+	PrintListHeight(env, s.Options, defIdx, s.Height)
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, err

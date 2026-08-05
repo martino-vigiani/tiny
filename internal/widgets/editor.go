@@ -33,7 +33,24 @@ func (editorWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, error)
 			return v, nil
 		}
 	}
-	PrintNote(env, "Editor not available, type the content directly:")
+	return readMultiline(ctx, s, env)
+}
+
+// endOfText is the sentinel that closes multi-line entry: a line containing
+// nothing but a single dot, the convention SMTP and `ed` have used for decades.
+// A blank line cannot serve as the terminator, because blank lines are exactly
+// what multi-line text is made of.
+const endOfText = "."
+
+// readMultiline collects text a line at a time until the sentinel or EOF.
+//
+// This is the path taken whenever no editor can be launched — no $EDITOR, no
+// terminal, a pipe, CI. Before, it read a single line and returned it, so
+// multi-line content was simply impossible without an editor: the one thing the
+// step exists for.
+func readMultiline(ctx context.Context, s spec.Step, env *Env) (any, error) {
+	PrintNote(env, "Type the content; finish with a line containing only "+endOfText)
+	var lines []string
 	for {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
@@ -43,24 +60,39 @@ func (editorWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, error)
 		if err != nil {
 			return nil, err
 		}
-		if line != "" {
-			return line, nil
-		}
-		if def, ok := s.Default.(string); ok && def != "" {
-			return def, nil
+		if line == endOfText {
+			break
 		}
 		if eof {
+			if len(lines) > 0 {
+				break
+			}
+			if def, ok := s.Default.(string); ok && def != "" {
+				return def, nil
+			}
 			if s.Required {
 				return nil, unexpectedEOF(s.Key)
 			}
 			return "", nil
 		}
+		lines = append(lines, line)
+	}
+
+	// Trailing blank lines are an artefact of typing, not content.
+	for len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	if len(lines) == 0 {
+		if def, ok := s.Default.(string); ok && def != "" {
+			return def, nil
+		}
 		if s.Required {
 			PrintError(env, "This field is required.")
-			continue
+			return readMultiline(ctx, s, env)
 		}
 		return "", nil
 	}
+	return strings.Join(lines, "\n"), nil
 }
 
 func runEditor(ctx context.Context, s spec.Step, editor string) (any, error) {

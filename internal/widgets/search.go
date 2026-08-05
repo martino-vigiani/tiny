@@ -42,7 +42,7 @@ func (searchWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, error)
 			PrintError(env, "No matches, try again.")
 			continue
 		}
-		PrintList(env, matches, -1)
+		PrintListHeight(env, matches, -1, s.Height)
 		for {
 			if err := ctx.Err(); err != nil {
 				return nil, err

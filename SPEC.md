@@ -90,6 +90,7 @@ steps:
 | `format`      | string               | `"date"`| `date`                                          | `"date"` (`YYYY-MM-DD`) or `"datetime"` (`YYYY-MM-DD HH:MM:SS`).      |
 | `delimiter`   | string               | `""`    | —                                               | Parsed but **currently unused** (forward compatibility).              |
 | `when`        | string               | `""`    | all                                             | Condition on an earlier answer; the step runs only if it holds. See *Conditional steps*. |
+| `height`      | int                  | `0`     | `select`, `multiselect`, `search`, `autocomplete` | Show at most N options at once; the rest become a `… N more` marker. `0` shows all. |
 
 **Convention:** give every step a `title` (short, sentence case, in English). If a step has
 neither `title` nor `prompt`, the header is empty.
@@ -453,7 +454,8 @@ step falls back to its default, exactly as under `-defaults`.
 | `-theme`      | Draw with a preset name or a theme YAML file.                  |
 | `-no-color`   | Disable ANSI colors (same as `NO_COLOR`).                      |
 | `-list-themes`| Print the built-in presets, one per line, and exit.            |
-| `-version`    | Print `tiny v0.2.0` and exit.                                  |
+| `-require-tty`| Exit 3 instead of resolving every step to its default when there is no terminal. |
+| `-version`    | Print `tiny v0.3.0` and exit.                                  |
 | `-h`          | Print usage and exit.                                          |
 
 Environment variables:
@@ -470,6 +472,7 @@ Environment variables:
 | `0`  | Success (also `-version` and `-h`).                            |
 | `1`  | Execution errors: unreadable file, invalid wizard spec, step failure. |
 | `2`  | Usage errors: unknown flag, wrong number of args, invalid `-format`. |
+| `3`  | `-require-tty` was passed and there is no terminal to answer from.   |
 
 ### Pipe / headless behavior
 
@@ -494,7 +497,7 @@ printf '2\nn\n' | tiny wizard.yaml      # piped: 2nd option, "n"
 tiny wizard.yaml | jq .framework        # UI on stderr, payload piped to jq
 tiny -o answers.json wizard.yaml        # payload to a file
 tiny -theme sleek wizard.yaml           # a different look, identical answers
-tiny -version                           # tiny v0.2.0
+tiny -version                           # tiny v0.3.0
 ```
 
 ---

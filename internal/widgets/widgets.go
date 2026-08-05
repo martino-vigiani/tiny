@@ -244,19 +244,68 @@ func PrintHeader(env *Env, title string) {
 // PrintList renders a numbered option list; the item at defaultIdx carries the
 // theme's default marker. Pass defaultIdx = -1 for no default marker.
 func PrintList(env *Env, items []string, defaultIdx int) {
-	printList(env, items, func(i int) bool { return i == defaultIdx })
+	PrintListHeight(env, items, defaultIdx, 0)
+}
+
+// PrintListHeight is PrintList with a cap on how many options are drawn.
+//
+// A list longer than the cap is windowed around the marked item and followed by
+// a count of what was left out, so the question itself does not scroll off the
+// top of the terminal. Every option keeps its own number, so what the user
+// types still means the same thing whether or not the list was truncated.
+func PrintListHeight(env *Env, items []string, defaultIdx, height int) {
+	from, to := window(len(items), defaultIdx, height)
+	printList(env, items, from, to, func(i int) bool { return i == defaultIdx })
 }
 
 // PrintListMarked renders a numbered option list where every item whose entry
 // in marked is true carries the theme's default marker. It is what multiselect
 // uses to show which options are preselected.
 func PrintListMarked(env *Env, items []string, marked []bool) {
-	printList(env, items, func(i int) bool { return i < len(marked) && marked[i] })
+	PrintListMarkedHeight(env, items, marked, 0)
 }
 
-func printList(env *Env, items []string, isMarked func(int) bool) {
+// PrintListMarkedHeight is PrintListMarked with the same height cap as
+// PrintListHeight.
+func PrintListMarkedHeight(env *Env, items []string, marked []bool, height int) {
+	first := -1
+	for i, m := range marked {
+		if m {
+			first = i
+			break
+		}
+	}
+	from, to := window(len(items), first, height)
+	printList(env, items, from, to, func(i int) bool { return i < len(marked) && marked[i] })
+}
+
+// window returns the slice of a list to draw: everything when height is zero or
+// the list already fits, otherwise a run of `height` items containing focus.
+func window(count, focus, height int) (from, to int) {
+	if height <= 0 || count <= height {
+		return 0, count
+	}
+	if focus < 0 {
+		return 0, height
+	}
+	// Keep the focused item roughly centred, then clamp to the ends.
+	from = focus - height/2
+	if from < 0 {
+		from = 0
+	}
+	if from+height > count {
+		from = count - height
+	}
+	return from, from + height
+}
+
+func printList(env *Env, items []string, from, to int, isMarked func(int) bool) {
 	t := env.look()
-	for i, item := range items {
+	if from > 0 {
+		appendOmitted(env, t, from, "above")
+	}
+	for i := from; i < to; i++ {
+		item := items[i]
 		env.buf = append(env.buf, t.Indent...)
 		if t.MarkerOpen != "" {
 			env.buf = append(env.buf, t.MarkerOpen...)
@@ -280,7 +329,23 @@ func printList(env *Env, items []string, isMarked func(int) bool) {
 		env.buf = append(env.buf, t.OptionClose...)
 		env.buf = append(env.buf, '\n')
 	}
+	if to < len(items) {
+		appendOmitted(env, t, len(items)-to, "below")
+	}
 	env.emit()
+}
+
+// appendOmitted draws the "N more" marker that stands in for the options a
+// height cap left out.
+func appendOmitted(env *Env, t *theme.Resolved, n int, where string) {
+	env.buf = append(env.buf, t.Indent...)
+	env.buf = append(env.buf, t.NoteOpen...)
+	env.buf = append(env.buf, "… "...)
+	env.buf = strconv.AppendInt(env.buf, int64(n), 10)
+	env.buf = append(env.buf, " more "...)
+	env.buf = append(env.buf, where...)
+	env.buf = append(env.buf, t.NoteClose...)
+	env.buf = append(env.buf, '\n')
 }
 
 // PrintPrompt writes the theme's input marker, optionally followed by extra

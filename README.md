@@ -88,11 +88,18 @@ printf '2\nn\n' | tiny wizard.yaml    # piped, no TTY needed
 | `-theme <preset\|file>` | Draw with a preset or a theme file. |
 | `-no-color` | Disable ANSI colors (same as `NO_COLOR`). |
 | `-list-themes` | Print the built-in presets. |
+| `-require-tty` | Fail (exit 3) instead of silently taking every default when there is no terminal. |
 | `-version`, `-h` | Version, usage. |
 
 Environment: `TINY_THEME` (preset name or path), `NO_COLOR`.
 
-Exit codes: `0` success · `1` execution or spec error · `2` usage error.
+Exit codes: `0` success · `1` execution or spec error · `2` usage error ·
+`3` `-require-tty` with no terminal.
+
+**When nobody is there to answer** — CI, a hook, an agent's sandboxed shell —
+every step falls back to its default and `tiny` says so on stderr. Pass
+`-require-tty` to make that a hard failure instead: a payload of answers no
+human gave is worse than an error.
 
 ## Step types (12)
 
@@ -110,6 +117,11 @@ Exit codes: `0` success · `1` execution or spec error · `2` usage error.
 | `editor` | `string` | Opens `$EDITOR` for multi-line text. |
 | `autocomplete` | `string` | Free text with prefix suggestions. |
 | `table` | row index | Shows a table; `selectable: true` returns the chosen row's index. |
+
+Any step with `options` accepts `height: N` to cap how many are shown at once;
+the rest are summarised as `… N more above/below`, and the option numbers stay
+the same either way. `editor` collects multi-line text directly when no
+`$EDITOR` is available — finish with a line containing only `.`
 
 Full schema and per-type reference: **[SPEC.md](SPEC.md)**.
 

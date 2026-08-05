@@ -33,7 +33,7 @@ func (multiselectWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, e
 	// The default is resolved once: it decides both what the list shows as
 	// preselected and what an empty answer returns.
 	marks, defErr := defaultMarks(s)
-	PrintListMarked(env, s.Options, marks)
+	PrintListMarkedHeight(env, s.Options, marks, s.Height)
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, err

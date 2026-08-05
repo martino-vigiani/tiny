@@ -54,7 +54,7 @@ func (autocompleteWidget) Run(ctx context.Context, s spec.Step, env *Env) (any, 
 			PrintError(env, "No matches, try again.")
 			continue
 		}
-		PrintList(env, matches, -1)
+		PrintListHeight(env, matches, -1, s.Height)
 		for {
 			if err := ctx.Err(); err != nil {
 				return nil, err
