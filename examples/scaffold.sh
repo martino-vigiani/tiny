@@ -19,7 +19,11 @@ TINY="${TINY:-tiny}"
 HEADLESS=""
 [ "${1:-}" = "--ci" ] && HEADLESS="-defaults"
 
-spec="$(mktemp -t scaffold-spec)"
+# The template carries its own X's rather than relying on `mktemp -t`: BSD
+# mktemp treats the argument as a prefix and invents the suffix, GNU mktemp
+# demands at least three X's and fails outright without them. This script ran
+# on macOS and died on every Linux it met.
+spec="$(mktemp "${TMPDIR:-/tmp}/scaffold-spec.XXXXXX")"
 trap 'rm -f "$spec"' EXIT
 
 cat >"$spec" <<'YAML'
@@ -73,7 +77,7 @@ deployment="$(jq -r '.deployment' <<<"$answers")"
 tests="$(jq -r '.tests' <<<"$answers")"
 git_init="$(jq -r '.git' <<<"$answers")"
 
-root="$(mktemp -d -t "scaffold")/$name"
+root="$(mktemp -d "${TMPDIR:-/tmp}/scaffold.XXXXXX")/$name"
 mkdir -p "$root/Sources/$name"
 
 cat >"$root/Sources/$name/${name}App.swift" <<SWIFT

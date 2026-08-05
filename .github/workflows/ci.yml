@@ -25,8 +25,20 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+      # -timeout is explicit so a hang reports itself with a goroutine dump
+      # instead of being killed by the runner with a bare exit 143, which says
+      # nothing about which test stopped.
       - name: Test
-        run: go test -race ./...
+        if: runner.os != 'Windows'
+        run: go test -race -timeout 120s ./...
+
+      # The race detector needs a huge virtual reservation that the Windows
+      # runners refuse ("ThreadSanitizer failed to allocate 8757706752 bytes"),
+      # so Windows runs the same tests without it: the platform-specific risk
+      # there is terminal and path handling, not data races.
+      - name: Test (Windows, no race detector)
+        if: runner.os == 'Windows'
+        run: go test -timeout 120s ./...
 
       - name: Benchmarks compile and run
         run: go test -run XXX -bench . -benchtime 10x ./...
