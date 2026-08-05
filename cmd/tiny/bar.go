@@ -58,6 +58,18 @@ func runBar(args []string, ui *UI) int {
 	if err != nil {
 		return usageError(ui, "bar: invalid total value %q: not a number", args[1])
 	}
+	// NaN and infinity parse successfully — strconv.ParseFloat accepts "NaN",
+	// "Inf" and "-Inf" — and then pass every comparison below, because every
+	// comparison against NaN is false. What they reach is `int(NaN + 0.5)`,
+	// which Go leaves architecture-dependent: arm64 yields 0 and the bar draws
+	// nonsense, amd64 yields the smallest int64 and the fill loop counts from
+	// -9223372036854775808 upwards, hanging the process. That is exactly how it
+	// escaped review — the macOS runner is arm64 and passed, both x86 runners
+	// hung until the job was killed.
+	if math.IsNaN(current) || math.IsNaN(total) ||
+		math.IsInf(current, 0) || math.IsInf(total, 0) {
+		return usageError(ui, "bar: current and total must be finite numbers, got %v and %v", current, total)
+	}
 	// A total of zero (or less) has no meaningful percentage — rejecting it
 	// outright is what keeps the division below from ever running on it.
 	if total <= 0 {

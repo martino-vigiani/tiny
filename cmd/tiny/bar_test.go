@@ -390,3 +390,24 @@ func TestBarIsThemedOnATerminalAndBareWithoutOne(t *testing.T) {
 		t.Errorf("the styled line measures %d cells, the plain one %d", got, want)
 	}
 }
+
+// NaN and infinity parse as valid floats and then defeat every range check,
+// because a comparison against NaN is always false. Rejecting them is not
+// tidiness: on amd64 `int(NaN + 0.5)` is the smallest int64, and the fill loop
+// counts up from there — the process hangs until something kills it. The test
+// asserts the exit code rather than timing anything, so it fails on arm64 too,
+// where the same input merely draws nonsense.
+func TestBarRejectsNaNAndInfinity(t *testing.T) {
+	for _, args := range [][]string{
+		{"NaN", "10"},
+		{"10", "NaN"},
+		{"Inf", "10"},
+		{"10", "Inf"},
+		{"-Inf", "10"},
+	} {
+		ui, buf := newBarTestUI(t, true, 80)
+		if code := runBar(args, ui); code != 2 {
+			t.Errorf("runBar(%v) = %d, want 2; it drew %q", args, code, buf.String())
+		}
+	}
+}
