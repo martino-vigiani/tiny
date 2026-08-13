@@ -1,0 +1,28 @@
+# A release gate: the same file a human answers before shipping, and CI
+# resolves with `tiny -defaults` (or `-set`) so the unattended path cannot
+# drift from the questions.
+#
+#   tiny examples/ci-gate.yaml
+#   tiny -defaults examples/ci-gate.yaml
+#   tiny -set env=prod -set version=v1.2.3 examples/ci-gate.yaml
+
+steps:
+  - type: select
+    key: env
+    title: Environment
+    options:
+      - {value: staging, label: Staging, description: production shapes, no pager}
+      - {value: prod, label: Production, description: real users, real pager}
+    default: staging
+
+  - type: input
+    key: version
+    title: Version
+    default: "v0.0.0"
+    pattern: "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
+    message: "Use vX.Y.Z."
+
+  - type: confirm
+    key: deploy
+    title: "Deploy ${version} to ${env}?"
+    default: "yes"

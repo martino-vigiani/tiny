@@ -7,10 +7,8 @@ it has to ask a human a few things. tiny is the command your script calls to ask
 them, and it hands the answers back as JSON.
 
 <p align="center">
-  <img src="docs/media/wizard.svg" alt="A wizard being answered in the terminal: a select with descriptions, a fuzzy search, a confirm, and the JSON payload at the end" width="100%">
+  <img src="docs/media/tiny-demo.gif" alt="tiny: a YAML file becomes a terminal wizard, then the same file answers itself headless in CI" width="100%">
 </p>
-
-<sub>Recorded from the real binary — see <a href="docs/media/record.py"><code>docs/media/record.py</code></a>.</sub>
 
 ## Where it sits
 
@@ -109,17 +107,20 @@ is a piece of your script, not the thing that owns the screen.
 ## Install
 
 ```sh
-go install github.com/martino-vigiani/tiny/cmd/tiny@latest
+brew install martino-vigiani/tap/tiny
 ```
 
-Or from source:
+That is a ~3 MB static binary. No Go, no runtime.
+
+Or pick a release asset for your OS from
+[Releases](https://github.com/martino-vigiani/tiny/releases), or build it:
 
 ```sh
+go install github.com/martino-vigiani/tiny/cmd/tiny@v0.4.0
+# or from a checkout:
 git clone https://github.com/martino-vigiani/tiny
-cd tiny && go build -trimpath -ldflags "-s -w" -o tiny ./cmd/tiny
+cd tiny && go build -trimpath -ldflags "-s -w -X main.version=v0.4.0" -o tiny ./cmd/tiny
 ```
-
-There is no tagged release yet, so both commands compile it locally.
 
 Then, to see everything it can do without writing a file:
 
@@ -141,6 +142,10 @@ YAML
 
 The questions are drawn on stderr and the JSON goes to stdout, so you can pipe
 the payload into `jq` while somebody is still answering the questions on screen.
+
+A release-gate spec that a human answers and CI resolves with `-defaults` is
+[`examples/ci-gate.yaml`](examples/ci-gate.yaml); the matching workflow is
+[`examples/github-action.yml`](examples/github-action.yml).
 
 A complete working script — spec, run, `jq`, act on the answers, plus a `--ci`
 mode — is [`examples/scaffold.sh`](examples/scaffold.sh):

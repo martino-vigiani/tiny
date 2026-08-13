@@ -160,6 +160,24 @@ steps:
 	}
 }
 
+func TestVersionFlag(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds the binary; skipped under -short")
+	}
+	bin := filepath.Join(t.TempDir(), binaryName)
+	build := exec.Command("go", "build", "-ldflags", "-X main.version=v9.9.9", "-o", bin, ".")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("building tiny: %v\n%s", err, out)
+	}
+	out, err := exec.Command(bin, "-version").CombinedOutput()
+	if err != nil {
+		t.Fatalf("tiny -version: %v\n%s", err, out)
+	}
+	if got := strings.TrimSpace(string(out)); got != "tiny v9.9.9" {
+		t.Errorf("-version = %q, want the link-time stamp", got)
+	}
+}
+
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {

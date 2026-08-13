@@ -21,17 +21,30 @@ jobs:
         run: go test ./...
 
       # One static binary per platform. No cgo, no runtime dependencies, so a
-      # plain cross-compile is all a release needs.
+      # plain cross-compile is all a release needs. The version is stamped
+      # from the tag so `tiny -version` matches the GitHub release.
       - name: Cross-compile
         run: |
           mkdir -p dist
+          version="${GITHUB_REF_NAME}"
           while read -r os arch; do
             ext=""
             [ "$os" = "windows" ] && ext=".exe"
-            out="dist/tiny-${os}-${arch}${ext}"
-            echo "building $out"
+            stem="tiny-${os}-${arch}"
+            out="dist/${stem}${ext}"
+            echo "building $out ($version)"
             GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 \
-              go build -trimpath -ldflags "-s -w" -o "$out" ./cmd/tiny
+              go build -trimpath -ldflags "-s -w -X main.version=${version}" \
+              -o "$out" ./cmd/tiny
+            mkdir -p "dist/pkg/${stem}"
+            if [ -n "$ext" ]; then
+              cp "$out" "dist/pkg/${stem}/tiny.exe"
+            else
+              cp "$out" "dist/pkg/${stem}/tiny"
+              chmod +x "dist/pkg/${stem}/tiny"
+            fi
+            cp LICENSE README.md "dist/pkg/${stem}/"
+            tar -czf "dist/${stem}.tar.gz" -C dist/pkg "${stem}"
           done <<'TARGETS'
           darwin arm64
           darwin amd64

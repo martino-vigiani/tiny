@@ -1,5 +1,8 @@
 # Media
 
+`tiny-demo.gif` / `tiny-demo.mp4` is the README hero: a Remotion walkthrough
+of the YAML → wizard → JSON → `-defaults` story.
+
 `wizard.svg` and `display.svg` are recordings of tiny actually running, not
 mock-ups: `record.py` drives the real binary under a pty, replays the bytes it
 emitted through a small terminal emulator, and writes the frames out as an

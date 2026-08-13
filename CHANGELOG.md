@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v0.4.0
+
+First public release: tagged binaries, Homebrew, and the README walkthrough.
+
 ### Added
 
 - **`tiny demo`**: the 20-step showcase compiled into the binary, so it runs
@@ -36,6 +40,12 @@
 - A `file` step's `default:` was returned headless but never shown at the
   prompt it was a suggestion for.
 - `match:` was honoured at the live prompt and inert in a pipe on `select`.
+
+### Packaging
+
+- `tiny -version` prints the link-time tag (`dev` on an untagged build).
+- Release assets include a `.tar.gz` per platform for Homebrew (binary only,
+  no Go toolchain).
 
 ## v0.3.0
 

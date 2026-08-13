@@ -592,7 +592,7 @@ step falls back to its default, exactly as under `-defaults`.
 | `-answers`    | Pre-seed answers from a JSON or YAML file.                      |
 | `-paths`      | Print every distinct set of steps the wizard can ask, one JSON object per line, with the answers that reach it. Reads no input. |
 | `-meta`       | Add a `_meta` block recording what produced the answers.        |
-| `-version`    | Print `tiny v0.3.0` and exit.                                  |
+| `-version`    | Print `tiny <version>` and exit. The version is the release tag when built from one, or `dev`. |
 | `-h`          | Print usage and exit.                                          |
 
 Environment variables:
@@ -636,7 +636,7 @@ printf '2\nn\n' | tiny wizard.yaml      # piped: 2nd option, "n"
 tiny wizard.yaml | jq .framework        # UI on stderr, payload piped to jq
 tiny -o answers.json wizard.yaml        # payload to a file
 tiny -theme sleek wizard.yaml           # a different look, identical answers
-tiny -version                           # tiny v0.3.0
+tiny -version                           # tiny v0.4.0
 ```
 
 ---

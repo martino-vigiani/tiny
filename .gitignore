@@ -2,6 +2,7 @@
 /tiny/
 /tiny.exe
 /dist/
+.DS_Store
 
 # Test and profiling artifacts
 *.test

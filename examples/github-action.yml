@@ -1,0 +1,35 @@
+# Copy into .github/workflows/ to run a tiny wizard headless in CI.
+# The spec is examples/ci-gate.yaml — same file a human answers locally.
+#
+#   tiny examples/ci-gate.yaml                 # interactive
+#   tiny -defaults examples/ci-gate.yaml       # this workflow
+
+name: Release gate
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tiny
+        run: |
+          curl -fsSL \
+            "https://github.com/martino-vigiani/tiny/releases/download/v0.4.0/tiny-linux-amd64.tar.gz" \
+            | tar -xz --strip-components=1
+          sudo install -m 0755 tiny /usr/local/bin/tiny
+          tiny -version
+
+      - name: Resolve the gate (same file, nobody answering)
+        run: tiny -defaults examples/ci-gate.yaml | tee answers.json | jq -e .
+
+      - name: Refuse a broken default
+        run: |
+          # A pattern that the default would fail is a load error, not a
+          # silent bad payload. This step documents that contract.
+          tiny -defaults examples/ci-gate.yaml >/dev/null

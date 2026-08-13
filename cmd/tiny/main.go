@@ -26,7 +26,8 @@ import (
 	"github.com/martino-vigiani/tiny/internal/theme"
 )
 
-const version = "v0.3.0"
+// Set at link time by `-X main.version=v0.4.0`. Unset builds print "dev".
+var version = "dev"
 
 // repeatable collects a flag given more than once, in the order it was given.
 type repeatable []string
