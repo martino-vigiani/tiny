@@ -10,11 +10,18 @@ import (
 	"encoding/json"
 	"math"
 	"math/rand"
+	"strings"
 	"testing"
 	"unicode/utf8"
 )
 
 // reference encodes answers the way tiny did before the hand-written encoder.
+//
+// Go 1.25's encoding/json writes invalid UTF-8 as the escape \ufffd. The v2
+// engine behind it in Go 1.27 writes the raw U+FFFD character instead. Both are
+// the same JSON string; tiny keeps the escape, so the oracle's raw form is
+// mapped back to it. The test inputs never contain a literal U+FFFD, so every
+// raw one in the output came from an invalid byte.
 func reference(t *testing.T, answers map[string]any) string {
 	t.Helper()
 	var buf bytes.Buffer
@@ -23,7 +30,7 @@ func reference(t *testing.T, answers map[string]any) string {
 	if err := enc.Encode(answers); err != nil {
 		t.Fatalf("encoding/json failed on %#v: %v", answers, err)
 	}
-	return buf.String()
+	return strings.ReplaceAll(buf.String(), "\uFFFD", `\ufffd`)
 }
 
 func assertParity(t *testing.T, answers map[string]any) {
