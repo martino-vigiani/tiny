@@ -18,8 +18,8 @@ gofmt -l .                         # must print nothing
 go build -trimpath -ldflags "-s -w" -o /tmp/tiny ./cmd/tiny
 ```
 
-The project is a single Go module (`github.com/martino-vigiani/tiny`) with no external
-runtime dependencies. Do not run `go mod tidy` unless you actually changed imports.
+The project is a single Go module (`github.com/martino-vigiani/tiny`) whose only direct
+dependencies are `golang.org/x/term` and `gopkg.in/yaml.v3`. Do not run `go mod tidy` unless you actually changed imports.
 
 ## Architecture
 
